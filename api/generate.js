@@ -1,20 +1,71 @@
 import { GoogleGenAI } from "@google/genai";
 
+/*
+==================================================
+WEB AI BUILDER — GENERATION ENGINE
+==================================================
+
+Features:
+- Secure server-side Gemini API
+- Automatic retry with exponential backoff
+- Timeout protection
+- Existing-code editing
+- Strict JSON output
+- Response validation
+- Prompt length protection
+- Basic abuse/safety protection
+- Generation metadata
+- Clean error handling
+- Future-ready architecture
+==================================================
+*/
+
+// ==================================================
+// CONFIG
+// ==================================================
+
 const MODEL = "gemini-3.7-flash";
+
+const MAX_RETRIES = 3;
+
+const BASE_RETRY_DELAY = 1200;
+
+const REQUEST_TIMEOUT = 55000;
+
+const MAX_PROMPT_LENGTH = 12000;
+
+const MAX_CODE_LENGTH = 80000;
+
+
+// ==================================================
+// SYSTEM PROMPT
+// ==================================================
 
 const SYSTEM_PROMPT = `
 You are the core AI engine of a premium AI Website Builder.
 
-Your job is to transform a user's natural-language request into a polished,
-production-quality website using ONLY:
+You are simultaneously acting as:
+
+- Senior frontend engineer
+- UI/UX designer
+- Responsive design specialist
+- Accessibility specialist
+- Product designer
+- Vanilla JavaScript engineer
+
+Your job is to transform a user's request into a polished,
+production-quality website.
+
+You may ONLY generate:
 
 - HTML
 - CSS
 - Vanilla JavaScript
 
-You are not a basic code generator.
-Think like a senior UI/UX designer, frontend engineer, accessibility specialist,
-responsive-design expert, and product designer working together.
+Do not use React.
+Do not use Vue.
+Do not use Angular.
+Do not use external JavaScript frameworks.
 
 ==================================================
 OUTPUT CONTRACT
@@ -22,7 +73,7 @@ OUTPUT CONTRACT
 
 Return ONLY valid JSON.
 
-The JSON MUST have exactly these properties:
+Exactly:
 
 {
   "html": "string",
@@ -30,17 +81,21 @@ The JSON MUST have exactly these properties:
   "js": "string"
 }
 
-Never return Markdown.
-Never use triple backticks.
-Never return explanations outside the JSON.
+Never return:
+
+- Markdown
+- Triple backticks
+- Explanations
+- Comments outside the requested code
 
 ==================================================
-HTML RULES
+HTML
 ==================================================
 
-The "html" field must contain ONLY content that belongs inside <body>.
+The html property must contain ONLY content that belongs
+inside the <body>.
 
-DO NOT include:
+Never include:
 
 <html>
 <head>
@@ -48,7 +103,7 @@ DO NOT include:
 <style>
 <script>
 
-Use semantic HTML such as:
+Use semantic HTML:
 
 <header>
 <nav>
@@ -57,98 +112,78 @@ Use semantic HTML such as:
 <article>
 <footer>
 
-Create meaningful class names.
+Use meaningful class names.
 
-Use accessible labels, buttons and navigation.
+Use accessible buttons and links.
 
-Do not create meaningless placeholder sections.
-
-Every section should have a clear purpose.
+Avoid meaningless placeholder content.
 
 ==================================================
 DESIGN QUALITY
 ==================================================
 
-Every generated website should look intentionally designed.
+Every website must look intentionally designed.
 
-Avoid generic beginner-level layouts such as:
+Avoid beginner-level layouts such as:
 
-- plain white background
-- single centered heading
+- plain default white pages
 - default browser buttons
+- random colors
 - excessive empty space
 - repetitive cards
-- unstyled forms
+- weak typography
 
-Instead create a strong visual hierarchy.
+Use appropriate:
 
-Consider:
-
-- premium typography
-- spacing scale
+- typography hierarchy
+- spacing system
 - color system
 - border radius
 - shadows
-- gradients
+- gradients when appropriate
 - glass effects when appropriate
-- cards
-- visual hierarchy
 - hover states
 - focus states
-- active states
-- subtle transitions
-- section separation
+- transitions
 - visual depth
 
-Do NOT force gradients, glassmorphism or animations when they do not fit
-the user's requested style.
+The design MUST match the user's request.
 
-The visual style must match the user's request.
+Do not force a specific visual style.
 
 ==================================================
 DESIGN SYSTEM
 ==================================================
 
-Before generating the UI, internally determine:
+Internally determine:
 
 - primary color
 - secondary color
-- accent color
-- background colors
+- accent
+- background
+- surface colors
 - text colors
 - border colors
-- typography hierarchy
-- spacing scale
-- border radius
-- shadow style
-- button style
+- typography
+- spacing
+- radius
+- shadows
+- button styles
 
-Then apply that design consistently across the entire website.
+Use CSS variables.
 
-Do not expose this internal reasoning.
+Example:
 
-==================================================
-LAYOUT
-==================================================
+:root {
+  --primary: ...;
+  --background: ...;
+  --surface: ...;
+  --text: ...;
+  --muted: ...;
+  --radius: ...;
+}
 
-Use modern layouts such as:
-
-- CSS Grid
-- Flexbox
-- responsive containers
-- fluid sizing
-- max-width content areas
-- CSS variables
-
-Avoid unnecessary fixed widths.
-
-Avoid horizontal overflow.
-
-Use:
-
-box-sizing: border-box;
-
-where appropriate.
+Keep the design system consistent.
 
 ==================================================
 RESPONSIVE DESIGN
@@ -156,79 +191,57 @@ RESPONSIVE DESIGN
 
 Every website MUST work on:
 
-1. Desktop
-2. Tablet
-3. Mobile
+Desktop
+Tablet
+Mobile
 
-Use responsive media queries.
+Use:
 
-Design mobile layouts intentionally rather than simply shrinking desktop.
+- CSS Grid
+- Flexbox
+- fluid widths
+- max-width containers
+- responsive typography
+- media queries
 
-Navigation must adapt to small screens.
+Mobile must be intentionally designed.
 
-Cards should stack when necessary.
+Never create accidental horizontal scrolling.
 
-Buttons should remain usable on touch devices.
+Navigation must adapt to mobile.
 
-Text must remain readable.
+Cards must stack when necessary.
 
-Never create horizontal scrolling unless specifically requested.
-
-==================================================
-ANIMATIONS
-==================================================
-
-Use tasteful animations where appropriate.
-
-Examples:
-
-- fade-in
-- slide-up
-- hover lift
-- button transitions
-- navigation transitions
-- card hover effects
-
-Keep animations lightweight.
-
-Respect:
-
-prefers-reduced-motion
-
-when appropriate.
-
-Do not overload the page with animations.
+Buttons must remain touch-friendly.
 
 ==================================================
 JAVASCRIPT
 ==================================================
 
-Use ONLY vanilla JavaScript.
+Use only vanilla JavaScript.
 
-JavaScript should be functional.
+JavaScript must actually work.
 
-When appropriate implement:
+Possible functionality:
 
-- mobile menu
-- smooth navigation
-- FAQ accordion
-- tabs
+- mobile navigation
+- dropdown
 - modal
-- form validation
-- counters
+- tabs
+- FAQ accordion
 - filters
+- counters
 - theme toggle
+- form validation
+- sliders
 - interactive cards
-- buttons
-- simple UI state
+- smooth scrolling
 
-Do not add JavaScript merely for decoration.
+Never reference DOM elements that do not exist.
 
-Do not reference DOM elements that do not exist.
+Never create broken event listeners.
 
-Do not create broken event listeners.
-
-If JavaScript is unnecessary, return:
+If JavaScript is unnecessary:
 
 ""
 
@@ -236,140 +249,146 @@ If JavaScript is unnecessary, return:
 NAVIGATION
 ==================================================
 
-If a navbar is requested:
-
-Create a complete responsive navigation.
+If navigation is requested:
 
 Desktop:
+
 - logo
-- navigation links
+- links
 - CTA when appropriate
 
 Mobile:
+
 - hamburger button
-- mobile navigation
-- functional open/close behavior
-
-Use accessible aria attributes.
+- open/close navigation
+- aria-expanded
+- accessible controls
 
 ==================================================
-HERO SECTION
+HERO
 ==================================================
 
-When a hero section is appropriate, make it visually strong.
+When appropriate create a strong hero section.
 
-Possible structure:
+Possible elements:
 
 - badge
 - headline
-- supporting description
-- primary CTA
+- supporting text
+- CTA
 - secondary CTA
-- visual element
-- stats
-- product mockup
+- statistics
+- visual
+- mockup
 - illustration
 
-Do not use the same hero structure for every website.
-
-Adapt it to the user's request.
+Do not use the exact same hero structure every time.
 
 ==================================================
-CONTENT SECTIONS
+CONTENT
 ==================================================
 
-Choose sections based on the actual request.
+Only generate sections that make sense.
 
-Possible sections include:
+Possible sections:
 
 - features
 - services
 - products
 - pricing
 - testimonials
-- statistics
 - portfolio
 - gallery
 - team
-- timeline
 - FAQ
 - contact
 - newsletter
 - CTA
 - footer
 
-Do NOT blindly generate every section.
-
-Only include sections that improve the requested website.
+Do not blindly generate every section.
 
 ==================================================
 IMAGES
 ==================================================
 
-Do not use broken image URLs.
+Never create obviously broken image URLs.
 
-If suitable imagery is needed, prefer reliable remote image URLs.
+If imagery is needed, use reliable remote image URLs.
 
-Always provide useful alt text.
+Always include useful alt text.
 
-If imagery is unnecessary, create visual elements using CSS instead.
+If imagery is not necessary, use CSS visuals.
 
 ==================================================
 ACCESSIBILITY
 ==================================================
 
-Follow basic accessibility practices:
+Use:
 
 - semantic HTML
-- accessible button labels
-- meaningful link text
-- alt attributes
+- accessible labels
+- meaningful buttons
+- useful alt text
 - keyboard-friendly controls
 - visible focus states
 - reasonable contrast
 
-Do not use clickable divs when a button or link is appropriate.
+Never use clickable divs when a button or link is appropriate.
 
 ==================================================
 SEO
 ==================================================
 
-Create semantic structure suitable for SEO.
+Use:
+
+- logical heading hierarchy
+- meaningful content
+- descriptive links
+- semantic structure
+
+The builder will handle document metadata separately.
+
+==================================================
+CSS
+==================================================
+
+CSS must be clean and maintainable.
 
 Use:
 
-- meaningful headings
-- logical heading hierarchy
-- descriptive links
-- descriptive text
-
-Do not put meta tags in the HTML field because the builder
-handles the document shell separately.
-
-==================================================
-CSS QUALITY
-==================================================
-
-CSS must be organized and maintainable.
-
-Prefer CSS variables for design tokens.
-
-Example:
-
-:root {
-  --primary: ...;
-  --background: ...;
-  --text: ...;
-  --radius: ...;
-}
+- CSS variables
+- logical grouping
+- reusable classes
+- responsive media queries
 
 Avoid unnecessary duplication.
 
-Use modern CSS features where appropriate.
+==================================================
+EXISTING WEBSITE EDITING
+==================================================
 
-Include responsive media queries.
+If existing HTML/CSS/JS is provided:
 
-Make hover/focus states consistent.
+1. Understand the current structure.
+2. Preserve useful functionality.
+3. Preserve useful content.
+4. Modify only what the user requested when possible.
+5. Fix obvious broken references.
+6. Do not unnecessarily rebuild the website.
+7. Return the COMPLETE updated HTML/CSS/JS.
+
+Example:
+
+User:
+"Add pricing."
+
+Add pricing without destroying the existing website.
+
+User:
+"Make it more premium."
+
+Improve the visual system while preserving functionality.
 
 ==================================================
 SECURITY
@@ -380,73 +399,255 @@ Never generate:
 - API keys
 - passwords
 - secret credentials
-- token harvesting
-- malicious scripts
-- credential theft
+- credential harvesting
 - malware
-- destructive code
-- hidden tracking intended to steal data
+- destructive scripts
+- token theft
+- malicious tracking
+- hidden data collection
 
 Never expose server-side secrets.
 
 ==================================================
-EXISTING WEBSITE EDITING
-==================================================
-
-The request may include an existing website.
-
-If existing code is provided:
-
-- understand the current structure
-- preserve useful functionality
-- preserve existing design where appropriate
-- modify only what the user requested when possible
-- do not unnecessarily destroy working sections
-- keep existing class relationships when useful
-- fix obvious broken references when encountered
-- return the COMPLETE updated HTML/CSS/JS
-
-Example:
-
-User:
-"Add a pricing section."
-
-Do not rebuild the entire website from scratch unless necessary.
-
-Example:
-
-User:
-"Make the website more premium."
-
-Improve the visual system while preserving useful content and functionality.
-
-==================================================
-QUALITY CHECK
+QUALITY CONTROL
 ==================================================
 
 Before returning the JSON, internally verify:
 
-1. HTML is valid enough to render.
-2. CSS selectors match HTML classes.
-3. JavaScript selectors match real HTML elements.
-4. Buttons have meaningful behavior where appropriate.
-5. Mobile layout does not break.
-6. No accidental horizontal overflow.
-7. No missing closing tags.
-8. No Markdown fences.
+1. HTML renders.
+2. CSS selectors match HTML.
+3. JavaScript selectors match HTML.
+4. Buttons work.
+5. Navigation works.
+6. Mobile layout works.
+7. No accidental horizontal overflow.
+8. No obvious missing closing tags.
 9. JSON is valid.
-10. HTML/CSS/JS are compatible with each other.
+10. HTML/CSS/JS work together.
 
-Do not output this checklist.
+Return ONLY JSON.
+`;
 
+
+// ==================================================
+// HELPERS
+// ==================================================
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+
+// --------------------------------------------------
+// Timeout helper
+// --------------------------------------------------
+
+function withTimeout(promise, timeout) {
+  return Promise.race([
+    promise,
+
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        const error = new Error(
+          "AI request timed out."
+        );
+
+        error.code = "AI_TIMEOUT";
+
+        reject(error);
+      }, timeout);
+    }),
+  ]);
+}
+
+
+// --------------------------------------------------
+// JSON cleanup
+// --------------------------------------------------
+
+function cleanJsonText(text) {
+  if (!text) return "";
+
+  let cleaned = String(text).trim();
+
+  cleaned = cleaned
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  return cleaned;
+}
+
+
+// --------------------------------------------------
+// Validate generated result
+// --------------------------------------------------
+
+function validateResult(result) {
+  if (!result || typeof result !== "object") {
+    return false;
+  }
+
+  if (
+    typeof result.html !== "string" ||
+    typeof result.css !== "string" ||
+    typeof result.js !== "string"
+  ) {
+    return false;
+  }
+
+  // Prevent accidental full-document output
+  if (/<html[\s>]/i.test(result.html)) {
+    return false;
+  }
+
+  if (/<body[\s>]/i.test(result.html)) {
+    return false;
+  }
+
+  if (/<head[\s>]/i.test(result.html)) {
+    return false;
+  }
+
+  return true;
+}
+
+
+// --------------------------------------------------
+// Retryable errors
+// --------------------------------------------------
+
+function isRetryableError(error) {
+  const status = Number(
+    error?.status ||
+    error?.code
+  );
+
+  return (
+    status === 408 ||
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  );
+}
+
+
+// --------------------------------------------------
+// Error message
+// --------------------------------------------------
+
+function getErrorMessage(error) {
+  return (
+    error?.message ||
+    error?.error?.message ||
+    "Website generation failed."
+  );
+}
+
+
+// --------------------------------------------------
+// Basic unsafe prompt detection
+// --------------------------------------------------
+
+function containsDangerousRequest(prompt) {
+  const text = prompt.toLowerCase();
+
+  const blockedPatterns = [
+    "steal password",
+    "steal passwords",
+    "steal token",
+    "credential theft",
+    "keylogger",
+    "ransomware",
+    "malware",
+    "virus",
+    "phishing page",
+    "phishing website",
+    "cookie stealer",
+    "session hijacking",
+  ];
+
+  return blockedPatterns.some((pattern) =>
+    text.includes(pattern)
+  );
+}
+
+
+// --------------------------------------------------
+// Normalize code
+// --------------------------------------------------
+
+function normalizeCode(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.slice(0, MAX_CODE_LENGTH);
+}
+
+
+// ==================================================
+// GEMINI GENERATION
+// ==================================================
+
+async function generateWebsite(
+  ai,
+  prompt,
+  existingCode
+) {
+  const existingAvailable =
+    existingCode.html ||
+    existingCode.css ||
+    existingCode.js;
+
+  let existingContext = "";
+
+  if (existingAvailable) {
+    existingContext = `
+==================================================
+CURRENT WEBSITE
+==================================================
+
+HTML:
+${existingCode.html}
+
+CSS:
+${existingCode.css}
+
+JAVASCRIPT:
+${existingCode.js}
+
+==================================================
+
+This is an existing website.
+
+Treat it as the current source of truth.
+
+Preserve working functionality.
+
+Only change what is necessary for the user's request.
+
+Return the COMPLETE updated website.
+`;
+  }
+
+  const userPrompt = `
 ==================================================
 USER REQUEST
 ==================================================
 
-Generate the website based on the user's request.
+${prompt}
 
-If existing code is supplied, improve that existing website according
-to the request instead of unnecessarily replacing everything.
+${existingContext}
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Generate the requested website.
 
 Return ONLY:
 
@@ -457,201 +658,423 @@ Return ONLY:
 }
 `;
 
-function cleanJsonText(text) {
-  if (!text) return "";
+  let lastError = null;
 
-  return text
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-}
+  for (
+    let attempt = 1;
+    attempt <= MAX_RETRIES;
+    attempt++
+  ) {
+    try {
+      console.log(
+        `[AI] Generation attempt ${attempt}/${MAX_RETRIES}`
+      );
 
-function validateResult(result) {
-  if (!result || typeof result !== "object") {
-    return false;
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: MODEL,
+
+          contents: [
+            {
+              role: "user",
+
+              parts: [
+                {
+                  text:
+                    SYSTEM_PROMPT +
+                    "\n\n" +
+                    userPrompt,
+                },
+              ],
+            },
+          ],
+
+          config: {
+            temperature: 0.7,
+
+            responseMimeType:
+              "application/json",
+
+            responseSchema: {
+              type: "object",
+
+              properties: {
+                html: {
+                  type: "string",
+                },
+
+                css: {
+                  type: "string",
+                },
+
+                js: {
+                  type: "string",
+                },
+              },
+
+              required: [
+                "html",
+                "css",
+                "js",
+              ],
+            },
+          },
+        }),
+
+        REQUEST_TIMEOUT
+      );
+
+      const rawText = response?.text;
+
+      if (!rawText) {
+        throw new Error(
+          "Gemini returned an empty response."
+        );
+      }
+
+      const cleaned =
+        cleanJsonText(rawText);
+
+      let result;
+
+      try {
+        result = JSON.parse(cleaned);
+      } catch {
+        const error = new Error(
+          "Gemini returned invalid JSON."
+        );
+
+        error.code = "INVALID_JSON";
+
+        throw error;
+      }
+
+      if (!validateResult(result)) {
+        const error = new Error(
+          "Gemini returned an invalid website structure."
+        );
+
+        error.code =
+          "INVALID_WEBSITE_STRUCTURE";
+
+        throw error;
+      }
+
+      return result;
+    } catch (error) {
+      lastError = error;
+
+      console.error(
+        `[AI] Attempt ${attempt} failed:`,
+        error
+      );
+
+      if (!isRetryableError(error)) {
+        throw error;
+      }
+
+      if (attempt < MAX_RETRIES) {
+        const delay =
+          BASE_RETRY_DELAY *
+          Math.pow(2, attempt - 1);
+
+        console.log(
+          `[AI] Retrying in ${delay}ms`
+        );
+
+        await sleep(delay);
+      }
+    }
   }
 
-  return (
-    typeof result.html === "string" &&
-    typeof result.css === "string" &&
-    typeof result.js === "string"
-  );
+  throw lastError;
 }
 
-export default async function handler(req, res) {
+
+// ==================================================
+// API HANDLER
+// ==================================================
+
+export default async function handler(
+  req,
+  res
+) {
+  const requestId =
+    `gen_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+
+  console.log(
+    `[AI] Request started: ${requestId}`
+  );
+
+  // ------------------------------------------------
+  // METHOD
+  // ------------------------------------------------
+
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
-      error: "Method not allowed.",
+      error:
+        "Method not allowed. Use POST.",
+      requestId,
     });
   }
 
+
+  // ------------------------------------------------
+  // API KEY
+  // ------------------------------------------------
+
+  const apiKey =
+    process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    console.error(
+      `[AI] Missing GEMINI_API_KEY`
+    );
+
+    return res.status(500).json({
+      success: false,
+
+      error:
+        "AI service is not configured.",
+
+      code:
+        "MISSING_GEMINI_API_KEY",
+
+      requestId,
+    });
+  }
+
+
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    // ------------------------------------------------
+    // BODY
+    // ------------------------------------------------
 
-    if (!apiKey) {
-      return res.status(500).json({
-        success: false,
-        error: "GEMINI_API_KEY is not configured.",
-      });
-    }
-
-    const body = req.body || {};
+    const body =
+      req.body || {};
 
     const prompt =
       typeof body.prompt === "string"
         ? body.prompt.trim()
         : "";
 
-const currentCode = body.currentCode || {
-  html: body.html || "",
-  css: body.css || "",
-  js: body.js || "",
-};
+
+    // ------------------------------------------------
+    // PROMPT VALIDATION
+    // ------------------------------------------------
+
     if (!prompt) {
       return res.status(400).json({
         success: false,
-        error: "Please enter a website request.",
+
+        error:
+          "Please describe what you want to build.",
+
+        code:
+          "EMPTY_PROMPT",
+
+        requestId,
       });
     }
 
-    const ai = new GoogleGenAI({
-      apiKey,
-    });
 
-    let existingCodeContext = "";
-
-    if (currentCode) {
-      existingCodeContext = `
-==================================================
-EXISTING WEBSITE
-==================================================
-
-HTML:
-${typeof currentCode.html === "string" ? currentCode.html : ""}
-
-CSS:
-${typeof currentCode.css === "string" ? currentCode.css : ""}
-
-JAVASCRIPT:
-${typeof currentCode.js === "string" ? currentCode.js : ""}
-
-==================================================
-
-Use the existing website as the starting point.
-
-Do not remove working functionality unless the user's request
-requires it.
-
-Return the COMPLETE updated website.
-`;
-    }
-
-    const finalPrompt = `
-USER REQUEST:
-
-${prompt}
-
-${existingCodeContext}
-`;
-
-    const response = await ai.models.generateContent({
-      model: MODEL,
-
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: `${SYSTEM_PROMPT}
-
-${finalPrompt}`,
-            },
-          ],
-        },
-      ],
-
-      config: {
-        temperature: 0.75,
-
-        responseMimeType: "application/json",
-
-        responseSchema: {
-          type: "object",
-
-          properties: {
-            html: {
-              type: "string",
-            },
-
-            css: {
-              type: "string",
-            },
-
-            js: {
-              type: "string",
-            },
-          },
-
-          required: ["html", "css", "js"],
-        },
-      },
-    });
-
-    const rawText = response.text;
-
-    if (!rawText) {
-      return res.status(502).json({
+    if (
+      prompt.length >
+      MAX_PROMPT_LENGTH
+    ) {
+      return res.status(413).json({
         success: false,
-        error: "Gemini returned an empty response.",
+
+        error:
+          "Your request is too long. Please shorten it.",
+
+        code:
+          "PROMPT_TOO_LONG",
+
+        requestId,
       });
     }
 
-    const cleanedText = cleanJsonText(rawText);
 
-    let result;
+    // ------------------------------------------------
+    // BASIC SAFETY
+    // ------------------------------------------------
 
-    try {
-      result = JSON.parse(cleanedText);
-    } catch (error) {
-      console.error("Gemini JSON parse error:", error);
-
-      return res.status(502).json({
+    if (
+      containsDangerousRequest(prompt)
+    ) {
+      return res.status(400).json({
         success: false,
-        error: "Gemini returned invalid JSON.",
+
+        error:
+          "This request cannot be used to generate malicious functionality.",
+
+        code:
+          "UNSAFE_REQUEST",
+
+        requestId,
       });
     }
 
-    if (!validateResult(result)) {
-      return res.status(502).json({
-        success: false,
-        error: "Gemini returned an invalid website structure.",
+
+    // ------------------------------------------------
+    // EXISTING CODE
+    // ------------------------------------------------
+
+    const existingCode = {
+      html: normalizeCode(
+        body.html
+      ),
+
+      css: normalizeCode(
+        body.css
+      ),
+
+      js: normalizeCode(
+        body.js
+      ),
+    };
+
+
+    // ------------------------------------------------
+    // GEMINI CLIENT
+    // ------------------------------------------------
+
+    const ai =
+      new GoogleGenAI({
+        apiKey,
       });
-    }
+
+
+    // ------------------------------------------------
+    // GENERATE
+    // ------------------------------------------------
+
+    const result =
+      await generateWebsite(
+        ai,
+        prompt,
+        existingCode
+      );
+
+
+    // ------------------------------------------------
+    // SUCCESS
+    // ------------------------------------------------
+
+    console.log(
+      `[AI] Request completed: ${requestId}`
+    );
 
     return res.status(200).json({
       success: true,
+
+      requestId,
+
       model: MODEL,
+
       html: result.html,
+
       css: result.css,
+
       js: result.js,
+
+      metadata: {
+        generatedAt:
+          new Date().toISOString(),
+
+        version:
+          "2.0",
+      },
     });
   } catch (error) {
-    console.error("AI generation error:", error);
+    // ------------------------------------------------
+    // ERROR
+    // ------------------------------------------------
+
+    console.error(
+      `[AI] Request failed: ${requestId}`,
+      error
+    );
 
     const status =
-      error?.status &&
-      Number.isInteger(error.status)
-        ? error.status
-        : 500;
+      Number(error?.status);
 
-    return res.status(status >= 400 && status < 600 ? status : 500).json({
+    // Temporary Gemini problems
+    if (
+      status === 408 ||
+      status === 429 ||
+      status === 500 ||
+      status === 502 ||
+      status === 503 ||
+      status === 504
+    ) {
+      return res.status(503).json({
+        success: false,
+
+        error:
+          "AI is temporarily busy. Please wait a few seconds and try again.",
+
+        code:
+          "AI_TEMPORARILY_UNAVAILABLE",
+
+        requestId,
+      });
+    }
+
+
+    // Timeout
+    if (
+      error?.code ===
+      "AI_TIMEOUT"
+    ) {
+      return res.status(504).json({
+        success: false,
+
+        error:
+          "AI took too long to respond. Please try again.",
+
+        code:
+          "AI_TIMEOUT",
+
+        requestId,
+      });
+    }
+
+
+    // Invalid JSON
+    if (
+      error?.code ===
+      "INVALID_JSON"
+    ) {
+      return res.status(502).json({
+        success: false,
+
+        error:
+          "AI generated an invalid response. Please try again.",
+
+        code:
+          "INVALID_AI_RESPONSE",
+
+        requestId,
+      });
+    }
+
+
+    // Generic error
+    return res.status(500).json({
       success: false,
+
       error:
-        error?.message ||
-        "Website generation failed.",
+        getErrorMessage(error),
+
+      code:
+        "AI_GENERATION_FAILED",
+
+      requestId,
     });
   }
 }
