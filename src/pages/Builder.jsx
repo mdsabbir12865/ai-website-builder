@@ -271,8 +271,7 @@ function Builder() {
   // =====================================================
   // SSE PARSER
   // =====================================================
-
-  async function readSSEStream(response) {
+async function* readSSEStream(response) {
     if (!response.body) {
       throw new Error(
         "Streaming is not supported by this response."
