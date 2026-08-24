@@ -1,208 +1,235 @@
 import { GoogleGenAI } from "@google/genai";
 
+/*
+============================================================
+ WebAI Builder — Fast AI Streaming Engine
+============================================================
+
+Features:
+✓ Gemini 3.7 Flash
+✓ Gemini 3.6 Flash fallback
+✓ Gemini 3.5 Flash-Lite fast fallback
+✓ Gemini 2.5 Flash-Lite fallback
+✓ Fast retry
+✓ SSE streaming
+✓ Live HTML/CSS/JS chunks
+✓ Existing-code editing
+✓ Request validation
+✓ Client disconnect protection
+✓ Error classification
+✓ No API key exposed to frontend
+============================================================
+*/
+
 export const maxDuration = 60;
 
 const MODELS = [
-  process.env.GEMINI_MODEL || "gemini-2.5-flash",
+  "gemini-3.7-flash",
+  "gemini-3.6-flash",
+  "gemini-3.5-flash-lite",
   "gemini-2.5-flash-lite",
 ];
 
-const MAX_PROMPT_LENGTH = 10000;
+const MAX_PROMPT_LENGTH = 12000;
 const MAX_CODE_LENGTH = 70000;
-const MAX_OUTPUT_TOKENS = 18000;
-const MAX_RETRIES = 1;
+const MAX_OUTPUT_TOKENS = 24000;
+
+const RETRYABLE_STATUS = new Set([
+  429,
+  500,
+  502,
+  503,
+  504,
+]);
 
 const SYSTEM_PROMPT = `
-You are the AI engine of a premium AI Website Builder.
+You are WebAI Builder, a premium AI website generation engine.
 
-Your job is to create or edit production-quality websites using ONLY:
+Your job is to create or modify complete production-quality websites.
 
-- HTML
-- CSS
-- Vanilla JavaScript
+TECHNOLOGY:
+- HTML5
+- CSS3
+- Vanilla JavaScript only
 
-The website must be:
-- modern
-- responsive
-- visually polished
-- accessible
-- functional
-- mobile friendly
-- production-quality
+Do not use React.
+Do not use Vue.
+Do not use Angular.
+Do not use external JavaScript frameworks.
 
-====================================================
-VERY IMPORTANT OUTPUT FORMAT
-====================================================
+============================================================
+OUTPUT FORMAT
+============================================================
 
-You MUST output exactly these three sections:
+Return ONLY these three sections:
 
 <WEB_HTML>
-HTML BODY CONTENT
+body content
 </WEB_HTML>
 
 <WEB_CSS>
-CSS CONTENT
+complete CSS
 </WEB_CSS>
 
 <WEB_JS>
-JAVASCRIPT CONTENT
+complete JavaScript
 </WEB_JS>
 
 Do NOT use markdown.
 Do NOT use triple backticks.
-Do NOT explain anything.
+Do NOT include explanations.
 
-====================================================
-HTML
-====================================================
+WEB_HTML must contain BODY CONTENT ONLY.
 
-WEB_HTML must contain ONLY content inside <body>.
-
-Never include:
+Do not include:
 <html>
 <head>
 <body>
-<style>
-<script>
 
-Use semantic HTML.
-
-Use:
-header
-nav
-main
-section
-article
-footer
-
-Use meaningful class names.
-
-Use accessible:
-aria-label
-aria-expanded
-aria-controls
-alt
-button labels
-
-====================================================
+============================================================
 DESIGN
-====================================================
+============================================================
 
-Create a deliberate visual design.
+Create a premium modern design.
 
-Use appropriate:
-- typography
-- spacing
-- colors
-- borders
-- shadows
-- radius
+Use when appropriate:
+
+- CSS variables
+- modern typography
+- responsive containers
+- CSS Grid
+- Flexbox
 - gradients
-- cards
-- buttons
+- subtle shadows
+- borders
+- modern radius
 - hover states
 - focus states
-- animations
+- smooth animations
+- micro interactions
+- visual hierarchy
 
-Do not force gradients or glassmorphism if they don't fit.
+Do not blindly use gradients or glassmorphism.
 
-Avoid:
-- boring default layouts
-- plain browser buttons
-- excessive empty space
-- repetitive sections
-- generic beginner designs
+The design must look intentionally designed, not like a beginner template.
 
-====================================================
+============================================================
 RESPONSIVE
-====================================================
+============================================================
 
-The website MUST work on:
+The website must work correctly on:
 
 Desktop
 Tablet
 Mobile
 
-Use:
-- Flexbox
-- CSS Grid
-- CSS variables
-- fluid sizing
-- max-width containers
-- media queries
+Use responsive CSS.
 
 Avoid horizontal overflow.
 
-Mobile navigation must actually work.
+Navigation must work on mobile.
 
-====================================================
+Cards and grids must adapt naturally.
+
+Buttons must remain usable on touch devices.
+
+============================================================
+ACCESSIBILITY
+============================================================
+
+Use semantic HTML.
+
+Use:
+
+aria-label
+aria-expanded
+aria-controls
+alt
+button
+label
+input
+
+Provide visible focus states.
+
+Do not use clickable divs when a button is appropriate.
+
+============================================================
 JAVASCRIPT
-====================================================
+============================================================
 
-Use ONLY vanilla JavaScript.
+Use vanilla JavaScript.
 
-Implement real interactions when useful:
+Implement real functionality when requested.
+
+Examples:
 
 - mobile menu
-- smooth scrolling
 - tabs
-- FAQ accordion
+- accordion
 - modal
-- filters
-- theme toggle
-- counters
 - form validation
+- filtering
+- search
+- theme switch
+- counters
+- smooth scrolling
 - interactive buttons
-- navigation
+
+Never create fake functionality.
 
 Never reference elements that do not exist.
 
 If JavaScript is unnecessary, return an empty WEB_JS section.
 
-====================================================
-EXISTING WEBSITE
-====================================================
+============================================================
+EXISTING CODE
+============================================================
 
-If existing code is supplied:
+If existing website code is provided:
 
-- understand it
-- preserve useful functionality
-- preserve useful structure
-- modify what the user requested
-- fix obvious problems
-- do not destroy working features unnecessarily
+1. Understand the existing website.
+2. Preserve useful functionality.
+3. Preserve useful structure.
+4. Fix obvious bugs.
+5. Apply the user's requested changes.
+6. Return the COMPLETE updated website.
 
-Always return the COMPLETE updated HTML, CSS and JS.
+Never return only a small fragment when modifying an existing website.
 
-====================================================
+============================================================
+QUALITY CHECK
+============================================================
+
+Before responding internally verify:
+
+- HTML selectors match CSS.
+- CSS classes actually exist.
+- JavaScript selectors actually exist.
+- Buttons work.
+- Navigation works.
+- Mobile layout works.
+- No accidental horizontal scrolling.
+- No broken references.
+- No API keys.
+- No secrets.
+- No malicious code.
+
+============================================================
 SECURITY
-====================================================
+============================================================
 
 Never generate:
+
 - API keys
 - passwords
-- secret credentials
 - credential theft
 - malware
 - destructive code
-- token stealing
-- malicious tracking
+- secret tokens
+- hidden tracking
+- phishing systems
 
-====================================================
-QUALITY CHECK
-====================================================
-
-Before finishing internally verify:
-
-1. HTML and CSS selectors match.
-2. JavaScript selectors match existing HTML.
-3. Buttons work.
-4. Navigation works.
-5. Mobile layout works.
-6. No accidental horizontal overflow.
-7. No broken references.
-8. No markdown.
-9. Correct WEB_HTML / WEB_CSS / WEB_JS sections.
+============================================================
 `;
 
 function sleep(ms) {
@@ -211,44 +238,78 @@ function sleep(ms) {
 
 function getStatus(error) {
   return (
-    error?.status ||
-    error?.response?.status ||
-    error?.statusCode ||
+    error?.status ??
+    error?.response?.status ??
+    error?.statusCode ??
+    error?.error?.code ??
     500
   );
 }
 
 function isRetryable(error) {
-  const status = getStatus(error);
-
-  return (
-    status === 429 ||
-    status === 500 ||
-    status === 502 ||
-    status === 503 ||
-    status === 504
-  );
+  return RETRYABLE_STATUS.has(getStatus(error));
 }
 
-function cleanSection(text = "") {
-  return String(text)
+function cleanText(value = "") {
+  return String(value)
     .replace(/\r/g, "")
     .replace(/```html/gi, "")
     .replace(/```css/gi, "")
     .replace(/```javascript/gi, "")
     .replace(/```js/gi, "")
-    .replace(/```/g, "")
-    .trim();
+    .replace(/```/g, "");
 }
 
-function sendSSE(res, event, data) {
+function sendEvent(res, event, data) {
   try {
+    if (res.writableEnded) return;
+
     res.write(
       `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
     );
-  } catch {
-    // Client disconnected.
+  } catch (error) {
+    console.error("[SSE] write failed:", error);
   }
+}
+
+function getExistingCode(body) {
+  const current = body.currentCode || {};
+
+  const html =
+    typeof current.html === "string"
+      ? current.html
+      : "";
+
+  const css =
+    typeof current.css === "string"
+      ? current.css
+      : "";
+
+  const js =
+    typeof current.js === "string"
+      ? current.js
+      : "";
+
+  if (!html && !css && !js) {
+    return "";
+  }
+
+  return `
+============================================================
+CURRENT WEBSITE CODE
+============================================================
+
+HTML:
+${html.slice(0, MAX_CODE_LENGTH)}
+
+CSS:
+${css.slice(0, MAX_CODE_LENGTH)}
+
+JAVASCRIPT:
+${js.slice(0, MAX_CODE_LENGTH)}
+
+============================================================
+`;
 }
 
 function extractSection(text, startTag, endTag) {
@@ -275,74 +336,50 @@ function extractSection(text, startTag, endTag) {
   };
 }
 
-function getExistingCode(body) {
-  const currentCode = body.currentCode || {};
-
+function extractResult(text) {
   const html =
-    typeof currentCode.html === "string"
-      ? currentCode.html
-      : "";
+    extractSection(
+      text,
+      "<WEB_HTML>",
+      "</WEB_HTML>"
+    )?.content || "";
 
   const css =
-    typeof currentCode.css === "string"
-      ? currentCode.css
-      : "";
+    extractSection(
+      text,
+      "<WEB_CSS>",
+      "</WEB_CSS>"
+    )?.content || "";
 
   const js =
-    typeof currentCode.js === "string"
-      ? currentCode.js
-      : "";
+    extractSection(
+      text,
+      "<WEB_JS>",
+      "</WEB_JS>"
+    )?.content || "";
 
-  if (!html && !css && !js) {
-    return "";
-  }
-
-  return `
-====================================================
-EXISTING WEBSITE CODE
-====================================================
-
-HTML:
-${html.slice(0, MAX_CODE_LENGTH)}
-
-CSS:
-${css.slice(0, MAX_CODE_LENGTH)}
-
-JAVASCRIPT:
-${js.slice(0, MAX_CODE_LENGTH)}
-
-====================================================
-`;
+  return {
+    html: cleanText(html).trim(),
+    css: cleanText(css).trim(),
+    js: cleanText(js).trim(),
+  };
 }
 
-function sendFinalError(res, error) {
-  const status = getStatus(error);
-
-  let message =
-    "AI generation failed. Please try again.";
-
+function errorMessage(status) {
   if (status === 429) {
-    message =
-      "AI rate limit reached. Please wait a moment and try again.";
-  } else if (
+    return "AI rate limit reached. Trying another model...";
+  }
+
+  if (
+    status === 500 ||
     status === 502 ||
     status === 503 ||
     status === 504
   ) {
-    message =
-      "AI is temporarily busy. Please try again in a few seconds.";
-  } else if (status === 500) {
-    message =
-      "AI server error. Please try again.";
+    return "AI model is temporarily busy. Trying another model...";
   }
 
-  sendSSE(res, "error", {
-    success: false,
-    message,
-    status,
-  });
-
-  res.end();
+  return "AI generation failed.";
 }
 
 export default async function handler(req, res) {
@@ -362,7 +399,26 @@ export default async function handler(req, res) {
     });
   }
 
-  res.statusCode = 200;
+  const body = req.body || {};
+
+  const prompt =
+    typeof body.prompt === "string"
+      ? body.prompt.trim()
+      : "";
+
+  if (!prompt) {
+    return res.status(400).json({
+      success: false,
+      error: "Please enter a website request.",
+    });
+  }
+
+  if (prompt.length > MAX_PROMPT_LENGTH) {
+    return res.status(400).json({
+      success: false,
+      error: "Prompt is too long.",
+    });
+  }
 
   res.setHeader(
     "Content-Type",
@@ -388,30 +444,16 @@ export default async function handler(req, res) {
     res.flushHeaders();
   }
 
-  const body = req.body || {};
+  let disconnected = false;
 
-  const prompt =
-    typeof body.prompt === "string"
-      ? body.prompt.trim()
-      : "";
+  req.on("close", () => {
+    disconnected = true;
+  });
 
-  if (!prompt) {
-    sendSSE(res, "error", {
-      success: false,
-      message: "Please enter a website request.",
-    });
-
-    return res.end();
-  }
-
-  if (prompt.length > MAX_PROMPT_LENGTH) {
-    sendSSE(res, "error", {
-      success: false,
-      message: "Your prompt is too long.",
-    });
-
-    return res.end();
-  }
+  sendEvent(res, "status", {
+    stage: "starting",
+    message: "Starting AI...",
+  });
 
   const existingCode = getExistingCode(body);
 
@@ -422,9 +464,9 @@ ${prompt}
 
 ${existingCode}
 
-Generate the complete website now.
+Generate the COMPLETE website.
 
-Remember to output ONLY:
+Output exactly:
 
 <WEB_HTML>
 ...
@@ -447,35 +489,37 @@ Remember to output ONLY:
   let selectedModel = null;
   let lastError = null;
 
-  sendSSE(res, "status", {
-    stage: "thinking",
-    message: "AI is thinking...",
-  });
-
   /*
   ==========================================================
-  MODEL + RETRY
+  FAST MODEL FALLBACK
   ==========================================================
   */
 
-  for (const model of MODELS) {
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        if (attempt > 0) {
-          await sleep(700 * attempt);
+  for (let modelIndex = 0; modelIndex < MODELS.length; modelIndex++) {
+    if (disconnected) return;
 
-          sendSSE(res, "status", {
-            stage: "retry",
-            message: "Retrying connection...",
-          });
-        }
+    const model = MODELS[modelIndex];
 
-        sendSSE(res, "status", {
-          stage: "connecting",
-          message: `Connecting to AI...`,
-        });
+    /*
+    First attempt
+    */
 
-        stream = await ai.models.generateContentStream({
+    try {
+      sendEvent(res, "status", {
+        stage: "connecting",
+        message:
+          modelIndex === 0
+            ? "Connecting to AI..."
+            : `Switching to backup AI model...`,
+        model,
+      });
+
+      console.log(
+        `[AI] Trying ${model}`
+      );
+
+      stream =
+        await ai.models.generateContentStream({
           model,
 
           contents: [
@@ -483,84 +527,164 @@ Remember to output ONLY:
               role: "user",
               parts: [
                 {
-                  text: `${SYSTEM_PROMPT}
-
-${finalPrompt}`,
+                  text:
+                    SYSTEM_PROMPT +
+                    "\n\n" +
+                    finalPrompt,
                 },
               ],
             },
           ],
 
           config: {
-            temperature: 0.55,
             maxOutputTokens: MAX_OUTPUT_TOKENS,
           },
         });
 
-        selectedModel = model;
+      selectedModel = model;
 
-        break;
-      } catch (error) {
-        lastError = error;
+      console.log(
+        `[AI] Connected to ${model}`
+      );
 
-        console.error(
-          `[AI] ${model} attempt ${attempt + 1} failed:`,
-          error
-        );
+      break;
+    } catch (error) {
+      lastError = error;
 
-        if (!isRetryable(error)) {
+      const status = getStatus(error);
+
+      console.error(
+        `[AI] ${model} attempt 1 failed`,
+        error
+      );
+
+      sendEvent(res, "status", {
+        stage: "fallback",
+        message: errorMessage(status),
+        status,
+      });
+
+      /*
+      --------------------------------------------------------
+      Quick retry ONLY for temporary errors.
+      --------------------------------------------------------
+      */
+
+      if (
+        isRetryable(error) &&
+        !disconnected
+      ) {
+        await sleep(650);
+
+        try {
+          console.log(
+            `[AI] ${model} quick retry`
+          );
+
+          stream =
+            await ai.models.generateContentStream({
+              model,
+
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    {
+                      text:
+                        SYSTEM_PROMPT +
+                        "\n\n" +
+                        finalPrompt,
+                    },
+                  ],
+                },
+              ],
+
+              config: {
+                maxOutputTokens:
+                  MAX_OUTPUT_TOKENS,
+              },
+            });
+
+          selectedModel = model;
+
+          console.log(
+            `[AI] ${model} retry succeeded`
+          );
+
           break;
+        } catch (retryError) {
+          lastError = retryError;
+
+          console.error(
+            `[AI] ${model} attempt 2 failed`,
+            retryError
+          );
         }
       }
-    }
-
-    if (stream) {
-      break;
     }
   }
 
   if (!stream) {
-    sendFinalError(res, lastError);
-    return;
+    const status = getStatus(lastError);
+
+    console.error(
+      "[AI] All models failed",
+      lastError
+    );
+
+    sendEvent(res, "error", {
+      message:
+        status === 503
+          ? "All AI models are temporarily busy. Please try again shortly."
+          : status === 429
+          ? "AI rate limit reached. Please try again shortly."
+          : "AI generation failed. Please try again.",
+      status,
+    });
+
+    return res.end();
   }
 
   /*
   ==========================================================
-  LIVE STREAM
+  STREAMING
   ==========================================================
   */
 
   let fullText = "";
 
-  let htmlSent = 0;
-  let cssSent = 0;
-  let jsSent = 0;
+  let lastHtmlLength = 0;
+  let lastCssLength = 0;
+  let lastJsLength = 0;
 
-  let currentStage = "";
-
-  sendSSE(res, "status", {
+  sendEvent(res, "status", {
     stage: "generating",
-    message: "Writing your website...",
+    message: "AI is writing your website...",
     model: selectedModel,
   });
 
   try {
     for await (const chunk of stream) {
+      if (disconnected) {
+        console.log(
+          "[AI] Client disconnected."
+        );
+        return;
+      }
+
       const text =
         typeof chunk?.text === "string"
           ? chunk.text
           : "";
 
-      if (!text) {
-        continue;
-      }
+      if (!text) continue;
 
       fullText += text;
 
       /*
-      ========================================================
+      --------------------------------------------------------
       HTML
-      ========================================================
+      --------------------------------------------------------
       */
 
       const htmlPart = extractSection(
@@ -570,23 +694,17 @@ ${finalPrompt}`,
       );
 
       if (htmlPart) {
-        const html = cleanSection(htmlPart.content);
+        const html = cleanText(
+          htmlPart.content
+        );
 
-        if (html.length > htmlSent) {
-          const delta = html.slice(htmlSent);
+        if (html.length > lastHtmlLength) {
+          const delta =
+            html.slice(lastHtmlLength);
 
-          htmlSent = html.length;
+          lastHtmlLength = html.length;
 
-          if (currentStage !== "html") {
-            currentStage = "html";
-
-            sendSSE(res, "status", {
-              stage: "html",
-              message: "Writing HTML...",
-            });
-          }
-
-          sendSSE(res, "code", {
+          sendEvent(res, "code", {
             type: "html",
             delta,
             value: html,
@@ -596,9 +714,9 @@ ${finalPrompt}`,
       }
 
       /*
-      ========================================================
+      --------------------------------------------------------
       CSS
-      ========================================================
+      --------------------------------------------------------
       */
 
       const cssPart = extractSection(
@@ -608,23 +726,17 @@ ${finalPrompt}`,
       );
 
       if (cssPart) {
-        const css = cleanSection(cssPart.content);
+        const css = cleanText(
+          cssPart.content
+        );
 
-        if (css.length > cssSent) {
-          const delta = css.slice(cssSent);
+        if (css.length > lastCssLength) {
+          const delta =
+            css.slice(lastCssLength);
 
-          cssSent = css.length;
+          lastCssLength = css.length;
 
-          if (currentStage !== "css") {
-            currentStage = "css";
-
-            sendSSE(res, "status", {
-              stage: "css",
-              message: "Designing CSS...",
-            });
-          }
-
-          sendSSE(res, "code", {
+          sendEvent(res, "code", {
             type: "css",
             delta,
             value: css,
@@ -634,9 +746,9 @@ ${finalPrompt}`,
       }
 
       /*
-      ========================================================
+      --------------------------------------------------------
       JAVASCRIPT
-      ========================================================
+      --------------------------------------------------------
       */
 
       const jsPart = extractSection(
@@ -646,23 +758,17 @@ ${finalPrompt}`,
       );
 
       if (jsPart) {
-        const js = cleanSection(jsPart.content);
+        const js = cleanText(
+          jsPart.content
+        );
 
-        if (js.length > jsSent) {
-          const delta = js.slice(jsSent);
+        if (js.length > lastJsLength) {
+          const delta =
+            js.slice(lastJsLength);
 
-          jsSent = js.length;
+          lastJsLength = js.length;
 
-          if (currentStage !== "js") {
-            currentStage = "js";
-
-            sendSSE(res, "status", {
-              stage: "js",
-              message: "Adding interactions...",
-            });
-          }
-
-          sendSSE(res, "code", {
+          sendEvent(res, "code", {
             type: "js",
             delta,
             value: js,
@@ -678,32 +784,8 @@ ${finalPrompt}`,
     ========================================================
     */
 
-    const finalHtml =
-      extractSection(
-        fullText,
-        "<WEB_HTML>",
-        "</WEB_HTML>"
-      )?.content || "";
-
-    const finalCss =
-      extractSection(
-        fullText,
-        "<WEB_CSS>",
-        "</WEB_CSS>"
-      )?.content || "";
-
-    const finalJs =
-      extractSection(
-        fullText,
-        "<WEB_JS>",
-        "</WEB_JS>"
-      )?.content || "";
-
-    const result = {
-      html: cleanSection(finalHtml),
-      css: cleanSection(finalCss),
-      js: cleanSection(finalJs),
-    };
+    const result =
+      extractResult(fullText);
 
     if (
       !result.html &&
@@ -711,11 +793,11 @@ ${finalPrompt}`,
       !result.js
     ) {
       throw new Error(
-        "AI returned an empty website."
+        "AI returned empty website code."
       );
     }
 
-    sendSSE(res, "complete", {
+    sendEvent(res, "complete", {
       success: true,
       model: selectedModel,
       html: result.html,
@@ -723,20 +805,26 @@ ${finalPrompt}`,
       js: result.js,
     });
 
+    console.log(
+      `[AI] Generation completed using ${selectedModel}`
+    );
+
     return res.end();
   } catch (error) {
     console.error(
-      "[AI] Streaming generation error:",
+      "[AI] Streaming failed:",
       error
     );
 
-    sendSSE(res, "error", {
-      success: false,
-      message:
-        error?.message ||
-        "Streaming generation failed.",
-    });
+    if (!res.writableEnded) {
+      sendEvent(res, "error", {
+        message:
+          error?.message ||
+          "Streaming generation failed.",
+        status: getStatus(error),
+      });
 
-    return res.end();
+      return res.end();
+    }
   }
 }

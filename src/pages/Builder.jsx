@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import JSZip from "jszip";
 import { supabase } from "../lib/supabase";
@@ -11,53 +11,33 @@ function Builder() {
   const [loading, setLoading] = useState(true);
 
   const [prompt, setPrompt] = useState("");
-
   const [htmlCode, setHtmlCode] = useState("");
   const [cssCode, setCssCode] = useState("");
   const [jsCode, setJsCode] = useState("");
 
-  const [activeMode, setActiveMode] = useState("preview");
   const [activeTab, setActiveTab] = useState("html");
-
+  const [activeMode, setActiveMode] = useState("code");
   const [device, setDevice] = useState("desktop");
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(true);
 
-  const [generating, setGenerating] = useState(false);
-
-  const [generationStage, setGenerationStage] =
-    useState("idle");
-
-  const [generationMessage, setGenerationMessage] =
-    useState("");
-
-  const [generationTime, setGenerationTime] =
-    useState(0);
-
-  const [showSettings, setShowSettings] =
-    useState(false);
-
-  const [showExport, setShowExport] =
-    useState(false);
-
-  const [fullscreen, setFullscreen] =
-    useState(false);
-
-  const [previewKey, setPreviewKey] =
-    useState(0);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
 
   const [history, setHistory] = useState([]);
-  const [historyIndex, setHistoryIndex] =
-    useState(-1);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  const [previewKey, setPreviewKey] = useState(0);
 
-  const [copied, setCopied] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiStage, setAiStage] = useState("");
+  const [aiMessage, setAiMessage] = useState("");
+  const [generationError, setGenerationError] = useState("");
 
-  const abortControllerRef = useRef(null);
-  const generationTimerRef = useRef(null);
+  const abortRef = useRef(null);
+  const generationIdRef = useRef(0);
 
   /*
   ==========================================================
@@ -69,154 +49,90 @@ function Builder() {
     let mounted = true;
 
     async function loadProject() {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-        if (!user) {
-          navigate("/login", {
-            replace: true,
-          });
+      if (!mounted) return;
 
-          return;
-        }
+      if (!user) {
+        navigate("/login", {
+          replace: true,
+        });
+        return;
+      }
 
-        const { data, error } =
-          await supabase
-            .from("projects")
-            .select("*")
-            .eq("id", projectId)
-            .eq("user_id", user.id)
-            .single();
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("id", projectId)
+        .eq("user_id", user.id)
+        .single();
 
-        if (error) {
-          console.error(
-            "Project loading error:",
-            error
-          );
+      if (!mounted) return;
 
-          if (mounted) {
-            setLoading(false);
-          }
-
-          return;
-        }
-
-        if (!mounted) return;
-
-        setProject(data);
-
-        setPrompt(data.prompt || "");
-
-        setHtmlCode(
-          data.html_code || ""
-        );
-
-        setCssCode(
-          data.css_code || ""
-        );
-
-        setJsCode(
-          data.js_code || ""
-        );
-
-        const initialState = {
-          html: data.html_code || "",
-          css: data.css_code || "",
-          js: data.js_code || "",
-        };
-
-        setHistory([initialState]);
-        setHistoryIndex(0);
-
-        setSaved(true);
-        setLoading(false);
-      } catch (error) {
+      if (error) {
         console.error(
           "Project loading error:",
           error
         );
 
-        if (mounted) {
-          setLoading(false);
-        }
+        setLoading(false);
+        return;
       }
+
+      setProject(data);
+      setPrompt(data.prompt || "");
+
+      setHtmlCode(
+        data.html_code || ""
+      );
+
+      setCssCode(
+        data.css_code || ""
+      );
+
+      setJsCode(
+        data.js_code || ""
+      );
+
+      setHistory([
+        {
+          html: data.html_code || "",
+          css: data.css_code || "",
+          js: data.js_code || "",
+        },
+      ]);
+
+      setHistoryIndex(0);
+      setLoading(false);
     }
 
     loadProject();
 
     return () => {
       mounted = false;
+
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
     };
   }, [projectId, navigate]);
 
   /*
   ==========================================================
-  CLEANUP
+  CURRENT CODE
   ==========================================================
   */
 
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      if (generationTimerRef.current) {
-        clearInterval(
-          generationTimerRef.current
-        );
-      }
-    };
-  }, []);
-
-  /*
-  ==========================================================
-  GENERATION TIMER
-  ==========================================================
-  */
-
-  function startGenerationTimer() {
-    setGenerationTime(0);
-
-    if (generationTimerRef.current) {
-      clearInterval(
-        generationTimerRef.current
-      );
-    }
-
-    generationTimerRef.current =
-      setInterval(() => {
-        setGenerationTime(
-          (previous) => previous + 1
-        );
-      }, 1000);
-  }
-
-  function stopGenerationTimer() {
-    if (generationTimerRef.current) {
-      clearInterval(
-        generationTimerRef.current
-      );
-
-      generationTimerRef.current = null;
-    }
-  }
-
-  /*
-  ==========================================================
-  CURRENT STATE
-  ==========================================================
-  */
-
-  function getCurrentState() {
-    return {
+  const currentCode = useMemo(
+    () => ({
       html: htmlCode,
       css: cssCode,
       js: jsCode,
-    };
-  }
+    }),
+    [htmlCode, cssCode, jsCode]
+  );
 
   /*
   ==========================================================
@@ -224,48 +140,47 @@ function Builder() {
   ==========================================================
   */
 
-  function pushHistory(state) {
-    setHistory((previous) => {
+  function pushHistory(nextState) {
+    setHistory((prev) => {
       const base =
         historyIndex >= 0
-          ? previous.slice(
+          ? prev.slice(
               0,
               historyIndex + 1
             )
-          : previous;
+          : [];
 
       const last =
         base[base.length - 1];
 
       if (
         last &&
-        last.html === state.html &&
-        last.css === state.css &&
-        last.js === state.js
+        last.html === nextState.html &&
+        last.css === nextState.css &&
+        last.js === nextState.js
       ) {
         return base;
       }
 
       const next = [
         ...base,
-        state,
+        nextState,
       ].slice(-30);
+
+      setHistoryIndex(
+        next.length - 1
+      );
 
       return next;
     });
+  }
 
-    setHistoryIndex((previous) => {
-      return Math.min(
-        previous + 1,
-        29
-      );
-    });
+  function markChanged() {
+    setSaved(false);
   }
 
   function handleUndo() {
-    if (historyIndex <= 0) {
-      return;
-    }
+    if (historyIndex <= 0) return;
 
     const previous =
       history[historyIndex - 1];
@@ -315,76 +230,17 @@ function Builder() {
 
   /*
   ==========================================================
-  MANUAL CODE CHANGE
-  ==========================================================
-  */
-
-  function updateHtml(value) {
-    setHtmlCode(value);
-    setSaved(false);
-  }
-
-  function updateCss(value) {
-    setCssCode(value);
-    setSaved(false);
-  }
-
-  function updateJs(value) {
-    setJsCode(value);
-    setSaved(false);
-  }
-
-  /*
-  ==========================================================
-  SAVE
-  ==========================================================
-  */
-
-  async function handleSave() {
-    if (!projectId) return;
-
-    setSaving(true);
-
-    const { error } =
-      await supabase
-        .from("projects")
-        .update({
-          prompt,
-          html_code: htmlCode,
-          css_code: cssCode,
-          js_code: jsCode,
-          updated_at:
-            new Date().toISOString(),
-        })
-        .eq("id", projectId);
-
-    setSaving(false);
-
-    if (error) {
-      console.error(
-        "Save error:",
-        error
-      );
-
-      alert("Save failed.");
-      return;
-    }
-
-    setSaved(true);
-  }
-
-  /*
-  ==========================================================
   SSE PARSER
   ==========================================================
   */
 
-  async function* readSSEStream(
-    response
+  async function readSSEStream(
+    response,
+    onEvent
   ) {
     if (!response.body) {
       throw new Error(
-        "Streaming is not supported by this connection."
+        "Streaming is not supported by this browser."
       );
     }
 
@@ -397,20 +253,14 @@ function Builder() {
     let buffer = "";
 
     while (true) {
-      const {
-        value,
-        done,
-      } = await reader.read();
+      const { value, done } =
+        await reader.read();
 
-      if (done) {
-        break;
-      }
+      if (done) break;
 
       buffer += decoder.decode(
         value,
-        {
-          stream: true,
-        }
+        { stream: true }
       );
 
       const events =
@@ -419,16 +269,20 @@ function Builder() {
       buffer =
         events.pop() || "";
 
-      for (const eventBlock of events) {
-        const lines =
-          eventBlock.split("\n");
+      for (const rawEvent of events) {
+        if (!rawEvent.trim()) continue;
 
         let eventName = "message";
         let dataText = "";
 
+        const lines =
+          rawEvent.split(/\r?\n/);
+
         for (const line of lines) {
           if (
-            line.startsWith("event:")
+            line.startsWith(
+              "event:"
+            )
           ) {
             eventName =
               line
@@ -437,7 +291,9 @@ function Builder() {
           }
 
           if (
-            line.startsWith("data:")
+            line.startsWith(
+              "data:"
+            )
           ) {
             dataText +=
               line
@@ -446,45 +302,35 @@ function Builder() {
           }
         }
 
-        if (!dataText) {
-          continue;
-        }
-
-        let data;
+        if (!dataText) continue;
 
         try {
-          data =
+          const data =
             JSON.parse(dataText);
-        } catch {
-          console.warn(
-            "Invalid SSE data:",
-            dataText
+
+          await onEvent(
+            eventName,
+            data
           );
-
-          continue;
+        } catch (error) {
+          console.warn(
+            "Invalid SSE event:",
+            error
+          );
         }
-
-        yield {
-          event: eventName,
-          data,
-        };
       }
     }
 
-    /*
-    ========================================================
-    FINAL BUFFER
-    ========================================================
-    */
+    const remaining =
+      buffer.trim();
 
-    if (buffer.trim()) {
-      const lines =
-        buffer.split("\n");
-
+    if (remaining) {
       let eventName = "message";
       let dataText = "";
 
-      for (const line of lines) {
+      for (const line of remaining.split(
+        /\r?\n/
+      )) {
         if (
           line.startsWith("event:")
         ) {
@@ -506,11 +352,10 @@ function Builder() {
 
       if (dataText) {
         try {
-          yield {
-            event: eventName,
-            data:
-              JSON.parse(dataText),
-          };
+          await onEvent(
+            eventName,
+            JSON.parse(dataText)
+          );
         } catch {
           // Ignore incomplete final event.
         }
@@ -520,61 +365,58 @@ function Builder() {
 
   /*
   ==========================================================
-  GENERATE WEBSITE
+  GENERATE WEBSITE — REAL TIME STREAM
   ==========================================================
   */
 
   async function handleGenerate() {
-    if (!prompt.trim()) {
+    if (isGenerating) return;
+
+    const cleanPrompt =
+      prompt.trim();
+
+    if (!cleanPrompt) {
       alert(
         "Please describe what you want to build."
       );
-
       return;
     }
-
-    if (generating) {
-      return;
-    }
-
-    setGenerating(true);
-    setErrorMessage("");
-    setSaved(false);
-
-    setGenerationStage(
-      "thinking"
-    );
-
-    setGenerationMessage(
-      "AI is thinking..."
-    );
-
-    setActiveMode("code");
-    setActiveTab("html");
 
     /*
-    --------------------------------------------------------
-    Clear current code
-    --------------------------------------------------------
+    Cancel previous request.
+    */
+
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+
+    const controller =
+      new AbortController();
+
+    abortRef.current =
+      controller;
+
+    const generationId =
+      ++generationIdRef.current;
+
+    setIsGenerating(true);
+    setGenerationError("");
+    setAiStage("starting");
+    setAiMessage(
+      "Starting AI..."
+    );
+
+    /*
+    Clear editor immediately so user sees
+    the new generation coming in.
     */
 
     setHtmlCode("");
     setCssCode("");
     setJsCode("");
 
-    /*
-    --------------------------------------------------------
-    Abort controller
-    --------------------------------------------------------
-    */
-
-    const controller =
-      new AbortController();
-
-    abortControllerRef.current =
-      controller;
-
-    startGenerationTimer();
+    setActiveMode("code");
+    setActiveTab("html");
 
     try {
       const response =
@@ -590,18 +432,17 @@ function Builder() {
                 "text/event-stream",
             },
 
-            body: JSON.stringify({
-              prompt,
-
-              currentCode: {
-                html: htmlCode,
-                css: cssCode,
-                js: jsCode,
-              },
-            }),
+            cache: "no-store",
 
             signal:
               controller.signal,
+
+            body: JSON.stringify({
+              prompt:
+                cleanPrompt,
+
+              currentCode,
+            }),
           }
         );
 
@@ -615,244 +456,289 @@ function Builder() {
 
           message =
             errorData.error ||
-            errorData.message ||
             message;
         } catch {
-          // Response was not JSON.
+          // Ignore invalid JSON.
         }
 
-        throw new Error(message);
+        throw new Error(
+          message
+        );
       }
 
       let streamedHtml = "";
       let streamedCss = "";
       let streamedJs = "";
 
-      for await (
-        const item of readSSEStream(
-          response
-        )
-      ) {
-        const {
-          event,
-          data,
-        } = item;
-
-        /*
-        ======================================================
-        STATUS
-        ======================================================
-        */
-
-        if (event === "status") {
-          setGenerationStage(
-            data.stage ||
-              "generating"
-          );
-
-          setGenerationMessage(
-            data.message ||
-              "Generating..."
-          );
+      await readSSEStream(
+        response,
+        async (
+          eventName,
+          data
+        ) => {
+          /*
+          Ignore events from an old request.
+          */
 
           if (
-            data.stage === "html"
+            generationId !==
+            generationIdRef.current
           ) {
-            setActiveTab("html");
-          }
-
-          if (
-            data.stage === "css"
-          ) {
-            setActiveTab("css");
-          }
-
-          if (
-            data.stage === "js"
-          ) {
-            setActiveTab("js");
-          }
-        }
-
-        /*
-        ======================================================
-        CODE STREAM
-        ======================================================
-        */
-
-        if (event === "code") {
-          const type =
-            data.type;
-
-          const value =
-            typeof data.value ===
-            "string"
-              ? data.value
-              : "";
-
-          if (type === "html") {
-            streamedHtml =
-              value;
-
-            setHtmlCode(
-              streamedHtml
-            );
-
-            setActiveTab(
-              "html"
-            );
-          }
-
-          if (type === "css") {
-            streamedCss =
-              value;
-
-            setCssCode(
-              streamedCss
-            );
-
-            setActiveTab(
-              "css"
-            );
-          }
-
-          if (type === "js") {
-            streamedJs =
-              value;
-
-            setJsCode(
-              streamedJs
-            );
-
-            setActiveTab(
-              "js"
-            );
+            return;
           }
 
           /*
-          ----------------------------------------------------
-          Automatically switch to preview occasionally
-          ----------------------------------------------------
+          STATUS
           */
 
-          setPreviewKey(
-            (value) => value + 1
-          );
-        }
+          if (
+            eventName ===
+            "status"
+          ) {
+            setAiStage(
+              data.stage ||
+                "working"
+            );
 
-        /*
-        ======================================================
-        COMPLETE
-        ======================================================
-        */
+            setAiMessage(
+              data.message ||
+                "AI is working..."
+            );
 
-        if (event === "complete") {
-          const finalHtml =
-            data.html ||
-            streamedHtml ||
-            "";
+            return;
+          }
 
-          const finalCss =
-            data.css ||
-            streamedCss ||
-            "";
+          /*
+          CODE STREAM
+          */
 
-          const finalJs =
-            data.js ||
-            streamedJs ||
-            "";
+          if (
+            eventName ===
+            "code"
+          ) {
+            const type =
+              data.type;
 
-          setHtmlCode(
-            finalHtml
-          );
+            const value =
+              typeof data.value ===
+              "string"
+                ? data.value
+                : "";
 
-          setCssCode(
-            finalCss
-          );
+            if (
+              type === "html"
+            ) {
+              streamedHtml =
+                value;
 
-          setJsCode(
-            finalJs
-          );
+              setHtmlCode(
+                value
+              );
 
-          pushHistory({
-            html: finalHtml,
-            css: finalCss,
-            js: finalJs,
-          });
+              /*
+              Stay on HTML while
+              HTML is being written.
+              */
 
-          setGenerationStage(
+              setActiveTab(
+                "html"
+              );
+            }
+
+            if (
+              type === "css"
+            ) {
+              streamedCss =
+                value;
+
+              setCssCode(
+                value
+              );
+
+              /*
+              Automatically move to CSS
+              when CSS generation begins.
+              */
+
+              setActiveTab(
+                "css"
+              );
+            }
+
+            if (
+              type === "js"
+            ) {
+              streamedJs =
+                value;
+
+              setJsCode(
+                value
+              );
+
+              setActiveTab(
+                "js"
+              );
+            }
+
+            /*
+            Keep editor mode visible.
+            */
+
+            setActiveMode(
+              "code"
+            );
+
+            return;
+          }
+
+          /*
+          COMPLETE
+          */
+
+          if (
+            eventName ===
             "complete"
-          );
+          ) {
+            const finalHtml =
+              data.html ??
+              streamedHtml ??
+              "";
 
-          setGenerationMessage(
-            "Website ready"
-          );
+            const finalCss =
+              data.css ??
+              streamedCss ??
+              "";
 
-          setActiveMode(
-            "preview"
-          );
+            const finalJs =
+              data.js ??
+              streamedJs ??
+              "";
 
-          setPreviewKey(
-            (value) => value + 1
-          );
+            setHtmlCode(
+              finalHtml
+            );
+
+            setCssCode(
+              finalCss
+            );
+
+            setJsCode(
+              finalJs
+            );
+
+            pushHistory({
+              html: finalHtml,
+              css: finalCss,
+              js: finalJs,
+            });
+
+            setSaved(false);
+
+            setPreviewKey(
+              (value) =>
+                value + 1
+            );
+
+            setAiStage(
+              "complete"
+            );
+
+            setAiMessage(
+              "Website generated successfully."
+            );
+
+            /*
+            Automatically show preview
+            after the full stream finishes.
+            */
+
+            setTimeout(() => {
+              if (
+                generationId ===
+                generationIdRef.current
+              ) {
+                setActiveMode(
+                  "preview"
+                );
+              }
+            }, 250);
+
+            return;
+          }
+
+          /*
+          ERROR
+          */
+
+          if (
+            eventName ===
+            "error"
+          ) {
+            throw new Error(
+              data.message ||
+                "AI generation failed."
+            );
+          }
         }
+      );
 
-        /*
-        ======================================================
-        ERROR
-        ======================================================
-        */
+      /*
+      If stream ended without complete,
+      keep whatever was streamed.
+      */
 
-        if (event === "error") {
-          throw new Error(
-            data.message ||
-              "AI generation failed."
-          );
-        }
+      if (
+        streamedHtml ||
+        streamedCss ||
+        streamedJs
+      ) {
+        setHtmlCode(
+          streamedHtml
+        );
+
+        setCssCode(
+          streamedCss
+        );
+
+        setJsCode(
+          streamedJs
+        );
+
+        setSaved(false);
       }
     } catch (error) {
       if (
         error?.name ===
         "AbortError"
       ) {
-        setGenerationStage(
-          "stopped"
-        );
-
-        setGenerationMessage(
-          "Generation stopped."
-        );
-      } else {
-        console.error(
-          "AI Generate Error:",
-          error
-        );
-
-        setErrorMessage(
-          error?.message ||
-            "Something went wrong."
-        );
-
-        setGenerationStage(
-          "error"
-        );
-
-        setGenerationMessage(
-          "Generation failed."
-        );
-
-        alert(
-          error?.message ||
-            "AI generation failed."
-        );
+        return;
       }
+
+      console.error(
+        "AI Generate Error:",
+        error
+      );
+
+      setGenerationError(
+        error?.message ||
+          "AI generation failed."
+      );
+
+      setAiStage(
+        "error"
+      );
+
+      setAiMessage(
+        error?.message ||
+          "AI generation failed."
+      );
     } finally {
-      stopGenerationTimer();
-
-      setGenerating(false);
-
-      abortControllerRef.current =
-        null;
+      if (
+        generationId ===
+        generationIdRef.current
+      ) {
+        setIsGenerating(false);
+      }
     }
   }
 
@@ -863,11 +749,69 @@ function Builder() {
   */
 
   function handleStopGeneration() {
-    if (
-      abortControllerRef.current
-    ) {
-      abortControllerRef.current.abort();
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
     }
+
+    setIsGenerating(false);
+    setAiStage("stopped");
+    setAiMessage(
+      "Generation stopped."
+    );
+  }
+
+  /*
+  ==========================================================
+  SAVE
+  ==========================================================
+  */
+
+  async function handleSave() {
+    if (saving) return;
+
+    setSaving(true);
+
+    const {
+      error,
+    } = await supabase
+      .from("projects")
+      .update({
+        prompt,
+
+        html_code:
+          htmlCode,
+
+        css_code:
+          cssCode,
+
+        js_code:
+          jsCode,
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        "id",
+        projectId
+      );
+
+    setSaving(false);
+
+    if (error) {
+      console.error(
+        "Save error:",
+        error
+      );
+
+      alert(
+        "Save failed."
+      );
+
+      return;
+    }
+
+    setSaved(true);
   }
 
   /*
@@ -877,29 +821,25 @@ function Builder() {
   */
 
   async function handleDownloadZip() {
+    if (!project) return;
+
     try {
       const zip =
         new JSZip();
 
-      const html =
-`<!DOCTYPE html>
+      const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-  <title>${project?.name || "My Website"}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${project.name || "My Website"}</title>
   <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
 ${htmlCode}
 
 <script src="script.js"></script>
-
 </body>
 </html>`;
 
@@ -937,7 +877,7 @@ ${htmlCode}
 
       link.download =
         `${
-          project?.name ||
+          project.name ||
           "website"
         }.zip`;
 
@@ -947,9 +887,7 @@ ${htmlCode}
 
       link.click();
 
-      document.body.removeChild(
-        link
-      );
+      link.remove();
 
       URL.revokeObjectURL(
         url
@@ -973,30 +911,25 @@ ${htmlCode}
   */
 
   function handleExportCode() {
-    const html =
-`<!DOCTYPE html>
+    if (!project) return;
+
+    const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-  <title>${project?.name || "My Website"}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${project.name || "My Website"}</title>
   <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
 ${htmlCode}
 
 <script src="script.js"></script>
-
 </body>
 </html>`;
 
-    const code =
-`===== index.html =====
+    const code = `===== index.html =====
 
 ${html}
 
@@ -1034,7 +967,7 @@ ${jsCode}
 
     link.download =
       `${
-        project?.name ||
+        project.name ||
         "website"
       }-code.txt`;
 
@@ -1044,9 +977,7 @@ ${jsCode}
 
     link.click();
 
-    document.body.removeChild(
-      link
-    );
+    link.remove();
 
     URL.revokeObjectURL(
       url
@@ -1055,73 +986,31 @@ ${jsCode}
 
   /*
   ==========================================================
-  COPY CODE
-  ==========================================================
-  */
-
-  async function handleCopyCode() {
-    const code =
-      activeTab === "html"
-        ? htmlCode
-        : activeTab === "css"
-        ? cssCode
-        : jsCode;
-
-    try {
-      await navigator.clipboard.writeText(
-        code
-      );
-
-      setCopied(true);
-
-      setTimeout(() => {
-        setCopied(false);
-      }, 1500);
-    } catch {
-      alert(
-        "Copy failed."
-      );
-    }
-  }
-
-  /*
-  ==========================================================
   PREVIEW DOCUMENT
   ==========================================================
   */
 
-  const previewDocument =
-`<!DOCTYPE html>
+  const previewDocument = `
+<!DOCTYPE html>
 <html lang="en">
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta
-  name="viewport"
-  content="width=device-width, initial-scale=1.0"
->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
 
 html,
 body {
   margin: 0;
-  padding: 0;
   min-height: 100%;
   overflow-x: hidden;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-}
-
-* {
-  box-sizing: border-box;
 }
 
 ${cssCode || ""}
 
 </style>
-
 </head>
 
 <body>
@@ -1129,42 +1018,20 @@ ${cssCode || ""}
 ${htmlCode || ""}
 
 <script>
-
 try {
-
 ${jsCode || ""}
-
 } catch (error) {
-
-console.error(
-  "Preview JavaScript error:",
-  error
-);
-
+  console.error("Preview JavaScript error:", error);
 }
-
 <\/script>
 
 </body>
-
-</html>`;
-
-  /*
-  ==========================================================
-  CODE LENGTH
-  ==========================================================
-  */
-
-  const currentCodeLength =
-    activeTab === "html"
-      ? htmlCode.length
-      : activeTab === "css"
-      ? cssCode.length
-      : jsCode.length;
+</html>
+`;
 
   /*
   ==========================================================
-  LOADING SCREEN
+  LOADING
   ==========================================================
   */
 
@@ -1204,8 +1071,8 @@ console.error(
         </h2>
 
         <p>
-          This project may have
-          been deleted or moved.
+          This project may have been
+          deleted or moved.
         </p>
 
         <button
@@ -1223,9 +1090,23 @@ console.error(
 
   /*
   ==========================================================
-  MAIN UI
+  RENDER
   ==========================================================
   */
+
+  const editorValue =
+    activeTab === "html"
+      ? htmlCode
+      : activeTab === "css"
+      ? cssCode
+      : jsCode;
+
+  const lineCount =
+    Math.max(
+      1,
+      editorValue.split("\n")
+        .length
+    );
 
   return (
     <div
@@ -1235,10 +1116,7 @@ console.error(
           : ""
       }`}
     >
-
-      {/* ====================================================
-          TOP BAR
-      ==================================================== */}
+      {/* TOP BAR */}
 
       <header className="builder-topbar">
 
@@ -1251,7 +1129,6 @@ console.error(
                 "/dashboard"
               )
             }
-            title="Back"
           >
             ←
           </button>
@@ -1290,8 +1167,6 @@ console.error(
 
         </div>
 
-        {/* CENTER */}
-
         <div className="builder-center-controls">
 
           <button
@@ -1328,8 +1203,6 @@ console.error(
 
         </div>
 
-        {/* ACTIONS */}
-
         <div className="builder-actions">
 
           <span
@@ -1352,7 +1225,8 @@ console.error(
               handleUndo
             }
             disabled={
-              historyIndex <= 0
+              historyIndex <=
+              0
             }
           >
             ↶
@@ -1389,8 +1263,7 @@ console.error(
               handleSave
             }
             disabled={
-              saving ||
-              generating
+              saving
             }
           >
             {saving
@@ -1402,9 +1275,7 @@ console.error(
 
       </header>
 
-      {/* ====================================================
-          EXPORT MENU
-      ==================================================== */}
+      {/* EXPORT */}
 
       {showExport && (
         <div className="export-menu">
@@ -1446,15 +1317,11 @@ console.error(
         </div>
       )}
 
-      {/* ====================================================
-          WORKSPACE
-      ==================================================== */}
+      {/* WORKSPACE */}
 
       <main className="builder-workspace">
 
-        {/* ==================================================
-            AI SIDEBAR
-        ================================================== */}
+        {/* LEFT AI */}
 
         <aside className="builder-left">
 
@@ -1476,54 +1343,36 @@ console.error(
 
           </div>
 
-          {/* AI STATUS */}
+          <div
+            className={`ai-status ${
+              isGenerating
+                ? "generating"
+                : ""
+            }`}
+          >
+            <span className="status-dot" />
 
-          <div className="ai-status">
-
-            <span
-              className={
-                generating
-                  ? "status-dot generating"
-                  : "status-dot"
-              }
-            />
-
-            {generating
-              ? generationMessage ||
-                "AI Working..."
+            {isGenerating
+              ? "AI Generating..."
               : "AI Ready"}
-
           </div>
-
-          {/* PROMPT */}
 
           <textarea
             className="ai-prompt"
             value={prompt}
+            disabled={
+              isGenerating
+            }
             onChange={(event) => {
               setPrompt(
                 event.target.value
               );
-
-              setSaved(false);
+              markChanged();
             }}
             placeholder="Describe what you want to build..."
-            disabled={generating}
           />
 
-          <div className="prompt-meta">
-            <span>
-              {prompt.length}/10000
-            </span>
-
-            <span>
-              AI Website Generator
-            </span>
-          </div>
-
-          {/* GENERATE */}
-
-          {!generating ? (
+          {!isGenerating ? (
             <button
               className="generate-button"
               onClick={
@@ -1538,7 +1387,7 @@ console.error(
             </button>
           ) : (
             <button
-              className="generate-button stop"
+              className="generate-button"
               onClick={
                 handleStopGeneration
               }
@@ -1551,89 +1400,41 @@ console.error(
             </button>
           )}
 
-          {/* GENERATION PROGRESS */}
+          {/* LIVE AI STATUS */}
 
-          {generating && (
-            <div className="generation-panel">
+          {(isGenerating ||
+            aiMessage ||
+            generationError) && (
+            <div className="ai-live-status">
 
-              <div className="generation-header">
-
-                <span>
-                  AI GENERATION
-                </span>
-
-                <strong>
-                  {generationTime}s
-                </strong>
-
+              <div className="ai-live-title">
+                {isGenerating
+                  ? "● LIVE"
+                  : aiStage ===
+                    "complete"
+                  ? "✓ COMPLETE"
+                  : "AI STATUS"}
               </div>
 
-              <div className="generation-line">
-                <div className="generation-pulse" />
+              <div className="ai-live-message">
+                {aiMessage ||
+                  "AI is working..."}
               </div>
 
-              <div className="generation-stage">
-
-                <span>
-                  {generationStage ===
-                    "thinking" &&
-                    "🧠"}
-
-                  {generationStage ===
-                    "html" &&
-                    "⌨️"}
-
-                  {generationStage ===
-                    "css" &&
-                    "🎨"}
-
-                  {generationStage ===
-                    "js" &&
-                    "⚡"}
-
-                  {generationStage ===
-                    "connecting" &&
-                    "🔗"}
-
-                  {generationStage ===
-                    "retry" &&
-                    "↻"}
-                </span>
-
-                <div>
-
-                  <strong>
-                    {generationMessage ||
-                      "Generating..."}
-                  </strong>
-
-                  <small>
-                    Code is appearing
-                    live
-                  </small>
-
+              {isGenerating && (
+                <div className="ai-progress">
+                  <span />
                 </div>
+              )}
 
-              </div>
+              {generationError && (
+                <div className="ai-error">
+                  {generationError}
+                </div>
+              )}
 
             </div>
           )}
-
-          {/* ERROR */}
-
-          {errorMessage && (
-            <div className="ai-error">
-              <strong>
-                Generation error
-              </strong>
-
-              <p>
-                {errorMessage}
-              </p>
-            </div>
-          )}
-
-          {/* QUICK ACTIONS */}
 
           <div className="quick-section">
 
@@ -1644,7 +1445,7 @@ console.error(
             <button
               onClick={() =>
                 setPrompt(
-                  "Make the website modern, premium and professional"
+                  "Make the website modern and professional"
                 )
               }
             >
@@ -1654,7 +1455,7 @@ console.error(
             <button
               onClick={() =>
                 setPrompt(
-                  "Create a beautiful responsive mobile-first design"
+                  "Create a beautiful responsive mobile design"
                 )
               }
             >
@@ -1664,11 +1465,11 @@ console.error(
             <button
               onClick={() =>
                 setPrompt(
-                  "Improve typography, spacing, colors and visual hierarchy"
+                  "Improve typography, spacing and visual hierarchy"
                 )
               }
             >
-              Aa Improve design
+              Aa Improve typography
             </button>
 
             <button
@@ -1678,22 +1479,10 @@ console.error(
                 )
               }
             >
-              ◈ Add interactions
-            </button>
-
-            <button
-              onClick={() =>
-                setPrompt(
-                  "Create a premium ecommerce store with products, cart UI, categories and responsive design"
-                )
-              }
-            >
-              🛍️ Store website
+              ◈ Add animations
             </button>
 
           </div>
-
-          {/* TIP */}
 
           <div className="ai-tip">
 
@@ -1710,8 +1499,6 @@ console.error(
 
           </div>
 
-          {/* SETTINGS */}
-
           <button
             className="settings-button"
             onClick={() =>
@@ -1725,9 +1512,7 @@ console.error(
 
         </aside>
 
-        {/* ==================================================
-            CODE EDITOR
-        ================================================== */}
+        {/* CODE EDITOR */}
 
         {activeMode ===
           "code" && (
@@ -1736,13 +1521,11 @@ console.error(
             <div className="editor-toolbar">
 
               <div className="editor-title">
-
                 <span className="live-dot" />
 
-                {generating
+                {isGenerating
                   ? "AI Live Code"
                   : "Code Editor"}
-
               </div>
 
               <div className="editor-tabs">
@@ -1800,18 +1583,7 @@ console.error(
               <div className="editor-actions">
 
                 <button
-                  title="Copy"
-                  onClick={
-                    handleCopyCode
-                  }
-                >
-                  {copied
-                    ? "✓"
-                    : "⧉"}
-                </button>
-
-                <button
-                  title="Refresh Preview"
+                  title="Refresh"
                   onClick={() =>
                     setPreviewKey(
                       (value) =>
@@ -1826,31 +1598,6 @@ console.error(
 
             </div>
 
-            {/* LIVE GENERATION BAR */}
-
-            {generating && (
-              <div className="live-generation-bar">
-
-                <div className="typing-indicator">
-
-                  <span />
-                  <span />
-                  <span />
-
-                </div>
-
-                <span>
-                  {generationMessage ||
-                    "AI is writing code..."}
-                </span>
-
-                <strong>
-                  {generationTime}s
-                </strong>
-
-              </div>
-            )}
-
             <div className="editor-body">
 
               <div className="line-numbers">
@@ -1858,21 +1605,16 @@ console.error(
                 {Array.from(
                   {
                     length:
-                      (
-                        activeTab ===
-                        "html"
-                          ? htmlCode
-                          : activeTab ===
-                            "css"
-                          ? cssCode
-                          : jsCode
-                      ).split(
-                        "\n"
-                      ).length,
+                      lineCount,
                   },
-                  (_, index) => (
+                  (
+                    _,
+                    index
+                  ) => (
                     <span
-                      key={index}
+                      key={
+                        index
+                      }
                     >
                       {index + 1}
                     </span>
@@ -1881,56 +1623,51 @@ console.error(
 
               </div>
 
-              {activeTab ===
-                "html" && (
-                <textarea
-                  className="premium-code-editor"
-                  value={
-                    htmlCode
-                  }
-                  onChange={(event) =>
-                    updateHtml(
-                      event.target
-                        .value
-                    )
-                  }
-                  spellCheck="false"
-                />
-              )}
+              <textarea
+                className="premium-code-editor"
+                value={
+                  editorValue
+                }
+                onChange={(
+                  event
+                ) => {
 
-              {activeTab ===
-                "css" && (
-                <textarea
-                  className="premium-code-editor"
-                  value={
-                    cssCode
-                  }
-                  onChange={(event) =>
-                    updateCss(
-                      event.target
-                        .value
-                    )
-                  }
-                  spellCheck="false"
-                />
-              )}
+                  const value =
+                    event
+                      .target
+                      .value;
 
-              {activeTab ===
-                "js" && (
-                <textarea
-                  className="premium-code-editor"
-                  value={
-                    jsCode
+                  if (
+                    activeTab ===
+                    "html"
+                  ) {
+                    setHtmlCode(
+                      value
+                    );
                   }
-                  onChange={(event) =>
-                    updateJs(
-                      event.target
-                        .value
-                    )
+
+                  if (
+                    activeTab ===
+                    "css"
+                  ) {
+                    setCssCode(
+                      value
+                    );
                   }
-                  spellCheck="false"
-                />
-              )}
+
+                  if (
+                    activeTab ===
+                    "js"
+                  ) {
+                    setJsCode(
+                      value
+                    );
+                  }
+
+                  markChanged();
+                }}
+                spellCheck="false"
+              />
 
             </div>
 
@@ -1942,7 +1679,7 @@ console.error(
 
               <span>
                 {activeTab ===
-                  "html"
+                "html"
                   ? "HTML"
                   : activeTab ===
                     "css"
@@ -1951,13 +1688,8 @@ console.error(
               </span>
 
               <span>
-                {currentCodeLength.toLocaleString()}
-                {" "}characters
-              </span>
-
-              <span>
-                {generating
-                  ? "● Live"
+                {isGenerating
+                  ? "● Streaming"
                   : "Auto Preview"}
               </span>
 
@@ -1966,9 +1698,7 @@ console.error(
           </section>
         )}
 
-        {/* ==================================================
-            PREVIEW
-        ================================================== */}
+        {/* PREVIEW */}
 
         {activeMode ===
           "preview" && (
@@ -1977,13 +1707,9 @@ console.error(
             <div className="preview-toolbar">
 
               <div className="preview-title">
-
                 <span className="live-dot" />
 
-                {generating
-                  ? "Live AI Preview"
-                  : "Live Preview"}
-
+                Live Preview
               </div>
 
               <div className="device-controls">
@@ -2000,7 +1726,6 @@ console.error(
                       "desktop"
                     )
                   }
-                  title="Desktop"
                 >
                   ▣
                 </button>
@@ -2017,7 +1742,6 @@ console.error(
                       "tablet"
                     )
                   }
-                  title="Tablet"
                 >
                   ▯
                 </button>
@@ -2034,7 +1758,6 @@ console.error(
                       "mobile"
                     )
                   }
-                  title="Mobile"
                 >
                   ▯
                 </button>
@@ -2075,7 +1798,6 @@ console.error(
               <div
                 className={`preview-device ${device}`}
               >
-
                 <iframe
                   key={
                     previewKey
@@ -2086,26 +1808,6 @@ console.error(
                   }
                   sandbox="allow-scripts"
                 />
-
-                {generating && (
-                  <div className="preview-generating">
-
-                    <div className="preview-ai-orb">
-                      ✦
-                    </div>
-
-                    <strong>
-                      AI is building...
-                    </strong>
-
-                    <span>
-                      {generationMessage ||
-                        "Writing your website"}
-                    </span>
-
-                  </div>
-                )}
-
               </div>
 
             </div>
@@ -2113,15 +1815,12 @@ console.error(
             <div className="preview-footer">
 
               <span>
-                ●{" "}
-                {generating
-                  ? "Generating"
-                  : "Live"}
+                ● Live
               </span>
 
               <span>
                 {device ===
-                  "desktop"
+                "desktop"
                   ? "Desktop"
                   : device ===
                     "tablet"
@@ -2136,9 +1835,7 @@ console.error(
 
       </main>
 
-      {/* ====================================================
-          SETTINGS
-      ==================================================== */}
+      {/* SETTINGS */}
 
       {showSettings && (
         <div
@@ -2149,10 +1846,11 @@ console.error(
             )
           }
         >
-
           <div
             className="settings-panel"
-            onClick={(event) =>
+            onClick={(
+              event
+            ) =>
               event.stopPropagation()
             }
           >
@@ -2160,7 +1858,6 @@ console.error(
             <div className="settings-header">
 
               <div>
-
                 <span>
                   PROJECT
                 </span>
@@ -2168,7 +1865,6 @@ console.error(
                 <h2>
                   Settings
                 </h2>
-
               </div>
 
               <button
@@ -2184,9 +1880,7 @@ console.error(
             </div>
 
             <div className="setting-row">
-
               <div>
-
                 <strong>
                   Project Name
                 </strong>
@@ -2194,15 +1888,11 @@ console.error(
                 <p>
                   {project.name}
                 </p>
-
               </div>
-
             </div>
 
             <div className="setting-row">
-
               <div>
-
                 <strong>
                   Project Type
                 </strong>
@@ -2211,15 +1901,11 @@ console.error(
                   {project.type ||
                     "Website"}
                 </p>
-
               </div>
-
             </div>
 
             <div className="setting-row">
-
               <div>
-
                 <strong>
                   Project ID
                 </strong>
@@ -2227,16 +1913,12 @@ console.error(
                 <p>
                   {projectId}
                 </p>
-
               </div>
-
             </div>
 
           </div>
-
         </div>
       )}
-
     </div>
   );
 }
