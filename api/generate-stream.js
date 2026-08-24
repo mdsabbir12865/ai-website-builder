@@ -1,84 +1,73 @@
 import { GoogleGenAI } from "@google/genai";
 
-/*
-===========================================================
- WebAI Builder — Advanced Streaming Engine
-===========================================================
-
-Features:
-- Gemini streaming
-- Model fallback
-- Retry with exponential backoff
-- SSE
-- Timeout protection
-- Existing code editing
-- HTML/CSS/JS extraction
-- Input limits
-- Graceful errors
-- Client disconnect handling
-===========================================================
-*/
+export const maxDuration = 60;
 
 const MODELS = [
-  "gemini-3.7-flash",
-  "gemini-3.6-flash",
+  process.env.GEMINI_MODEL || "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
 ];
 
-const MAX_PROMPT_LENGTH = 12000;
-const MAX_CODE_LENGTH = 90000;
-const MAX_RETRIES_PER_MODEL = 2;
-const REQUEST_TIMEOUT = 90000;
+const MAX_PROMPT_LENGTH = 10000;
+const MAX_CODE_LENGTH = 70000;
+const MAX_OUTPUT_TOKENS = 18000;
+const MAX_RETRIES = 1;
 
 const SYSTEM_PROMPT = `
-You are the core generation engine of a premium AI Website Builder.
+You are the AI engine of a premium AI Website Builder.
 
-You are simultaneously:
+Your job is to create or edit production-quality websites using ONLY:
 
-- Senior frontend engineer
-- UI/UX designer
-- Product designer
-- Accessibility specialist
-- Responsive design expert
-- JavaScript engineer
+- HTML
+- CSS
+- Vanilla JavaScript
 
-Your task is to transform the user's request into a production-quality
-website using ONLY:
+The website must be:
+- modern
+- responsive
+- visually polished
+- accessible
+- functional
+- mobile friendly
+- production-quality
 
-HTML
-CSS
-Vanilla JavaScript
+====================================================
+VERY IMPORTANT OUTPUT FORMAT
+====================================================
 
-========================================================
-CRITICAL OUTPUT FORMAT
-========================================================
-
-You MUST stream the result using exactly these sections:
+You MUST output exactly these three sections:
 
 <WEB_HTML>
-HTML BODY CONTENT HERE
+HTML BODY CONTENT
 </WEB_HTML>
 
 <WEB_CSS>
-CSS HERE
+CSS CONTENT
 </WEB_CSS>
 
 <WEB_JS>
-JAVASCRIPT HERE
+JAVASCRIPT CONTENT
 </WEB_JS>
 
-Do not use Markdown.
-Do not use triple backticks.
-Do not explain anything.
-Do not put <html>, <head> or <body> inside WEB_HTML.
+Do NOT use markdown.
+Do NOT use triple backticks.
+Do NOT explain anything.
 
-========================================================
+====================================================
 HTML
-========================================================
+====================================================
 
-WEB_HTML must contain ONLY content that belongs inside <body>.
+WEB_HTML must contain ONLY content inside <body>.
 
-Use semantic HTML:
+Never include:
+<html>
+<head>
+<body>
+<style>
+<script>
 
+Use semantic HTML.
+
+Use:
 header
 nav
 main
@@ -89,53 +78,44 @@ footer
 Use meaningful class names.
 
 Use accessible:
-
 aria-label
 aria-expanded
 aria-controls
 alt
 button labels
 
-Avoid meaningless placeholder sections.
+====================================================
+DESIGN
+====================================================
 
-Every section must have a purpose.
+Create a deliberate visual design.
 
-========================================================
-DESIGN QUALITY
-========================================================
-
-Do NOT generate beginner-level websites.
-
-Avoid:
-
-- plain default browser buttons
-- excessive empty space
-- boring white layouts
-- repetitive cards
-- generic templates
-
-Create a deliberate visual system.
-
-Consider:
-
+Use appropriate:
 - typography
 - spacing
-- visual hierarchy
-- color system
-- gradients when appropriate
-- shadows
+- colors
 - borders
+- shadows
 - radius
+- gradients
+- cards
+- buttons
 - hover states
 - focus states
 - animations
-- responsive layout
 
-Do not force glassmorphism or gradients unless appropriate.
+Do not force gradients or glassmorphism if they don't fit.
 
-========================================================
-RESPONSIVE DESIGN
-========================================================
+Avoid:
+- boring default layouts
+- plain browser buttons
+- excessive empty space
+- repetitive sections
+- generic beginner designs
+
+====================================================
+RESPONSIVE
+====================================================
 
 The website MUST work on:
 
@@ -144,141 +124,92 @@ Tablet
 Mobile
 
 Use:
+- Flexbox
+- CSS Grid
+- CSS variables
+- fluid sizing
+- max-width containers
+- media queries
 
-Flexbox
-CSS Grid
-fluid sizing
-max-width containers
-media queries
-CSS variables
+Avoid horizontal overflow.
 
-Never create accidental horizontal scrolling.
+Mobile navigation must actually work.
 
-Mobile navigation must work.
-
-Cards must adapt to smaller screens.
-
-========================================================
+====================================================
 JAVASCRIPT
-========================================================
+====================================================
 
-Use only vanilla JavaScript.
+Use ONLY vanilla JavaScript.
 
-Implement functionality when appropriate:
+Implement real interactions when useful:
 
-- mobile navigation
-- menus
+- mobile menu
+- smooth scrolling
 - tabs
 - FAQ accordion
 - modal
-- form validation
 - filters
 - theme toggle
 - counters
-- interactions
-- smooth scrolling
+- form validation
+- interactive buttons
+- navigation
 
-Do not create fake functionality.
+Never reference elements that do not exist.
 
-Do not reference elements that do not exist.
+If JavaScript is unnecessary, return an empty WEB_JS section.
 
-If JavaScript is unnecessary:
-
-WEB_JS should be empty.
-
-========================================================
-ACCESSIBILITY
-========================================================
-
-Use:
-
-semantic HTML
-keyboard-friendly controls
-visible focus states
-reasonable contrast
-meaningful labels
-
-Prefer buttons over clickable divs.
-
-========================================================
-CSS
-========================================================
-
-Use a maintainable CSS architecture.
-
-Prefer:
-
-:root variables
-responsive breakpoints
-component-like sections
-consistent spacing
-
-Avoid unnecessary duplication.
-
-========================================================
+====================================================
 EXISTING WEBSITE
-========================================================
+====================================================
 
 If existing code is supplied:
 
-- understand it first
+- understand it
 - preserve useful functionality
 - preserve useful structure
-- modify only what the user requested
-- fix obvious bugs
+- modify what the user requested
+- fix obvious problems
 - do not destroy working features unnecessarily
 
-Always return the COMPLETE updated website.
+Always return the COMPLETE updated HTML, CSS and JS.
 
-========================================================
+====================================================
+SECURITY
+====================================================
+
+Never generate:
+- API keys
+- passwords
+- secret credentials
+- credential theft
+- malware
+- destructive code
+- token stealing
+- malicious tracking
+
+====================================================
 QUALITY CHECK
-========================================================
+====================================================
 
 Before finishing internally verify:
 
-HTML selectors match CSS.
-JavaScript selectors match HTML.
-Buttons work.
-Navigation works.
-Mobile layout works.
-No horizontal overflow.
-No broken references.
-No API keys.
-No secrets.
-No malicious code.
-
-========================================================
-SECURITY
-========================================================
-
-Never generate:
-
-API keys
-password theft
-credential harvesting
-malware
-destructive scripts
-secret tokens
-hidden tracking for theft
-
-========================================================
+1. HTML and CSS selectors match.
+2. JavaScript selectors match existing HTML.
+3. Buttons work.
+4. Navigation works.
+5. Mobile layout works.
+6. No accidental horizontal overflow.
+7. No broken references.
+8. No markdown.
+9. Correct WEB_HTML / WEB_CSS / WEB_JS sections.
 `;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function cleanText(value = "") {
-  return String(value)
-    .replace(/\r/g, "")
-    .replace(/```html/gi, "")
-    .replace(/```css/gi, "")
-    .replace(/```javascript/gi, "")
-    .replace(/```js/gi, "")
-    .replace(/```/g, "");
-}
-
-function getErrorStatus(error) {
+function getStatus(error) {
   return (
     error?.status ||
     error?.response?.status ||
@@ -288,7 +219,7 @@ function getErrorStatus(error) {
 }
 
 function isRetryable(error) {
-  const status = getErrorStatus(error);
+  const status = getStatus(error);
 
   return (
     status === 429 ||
@@ -299,49 +230,33 @@ function isRetryable(error) {
   );
 }
 
-function createTimeout(ms) {
-  let timer;
-
-  const promise = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      reject(new Error("AI request timed out."));
-    }, ms);
-  });
-
-  return {
-    promise,
-    clear() {
-      clearTimeout(timer);
-    },
-  };
+function cleanSection(text = "") {
+  return String(text)
+    .replace(/\r/g, "")
+    .replace(/```html/gi, "")
+    .replace(/```css/gi, "")
+    .replace(/```javascript/gi, "")
+    .replace(/```js/gi, "")
+    .replace(/```/g, "")
+    .trim();
 }
 
-/*
------------------------------------------------------------
-SSE helpers
------------------------------------------------------------
-*/
-
-function sendEvent(res, event, data) {
+function sendSSE(res, event, data) {
   try {
     res.write(
       `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
     );
   } catch {
-    // Client may have disconnected.
+    // Client disconnected.
   }
 }
-
-/*
------------------------------------------------------------
-Extract streamed sections
------------------------------------------------------------
-*/
 
 function extractSection(text, startTag, endTag) {
   const start = text.indexOf(startTag);
 
-  if (start === -1) return null;
+  if (start === -1) {
+    return null;
+  }
 
   const contentStart = start + startTag.length;
 
@@ -360,13 +275,8 @@ function extractSection(text, startTag, endTag) {
   };
 }
 
-function buildExistingCode(body) {
-  const currentCode =
-    body.currentCode || {
-      html: body.html || "",
-      css: body.css || "",
-      js: body.js || "",
-    };
+function getExistingCode(body) {
+  const currentCode = body.currentCode || {};
 
   const html =
     typeof currentCode.html === "string"
@@ -388,51 +298,60 @@ function buildExistingCode(body) {
   }
 
   return `
-========================================================
-EXISTING WEBSITE
-========================================================
+====================================================
+EXISTING WEBSITE CODE
+====================================================
 
 HTML:
-
 ${html.slice(0, MAX_CODE_LENGTH)}
 
 CSS:
-
 ${css.slice(0, MAX_CODE_LENGTH)}
 
 JAVASCRIPT:
-
 ${js.slice(0, MAX_CODE_LENGTH)}
 
-========================================================
+====================================================
 `;
 }
 
-/*
------------------------------------------------------------
-Main handler
------------------------------------------------------------
-*/
+function sendFinalError(res, error) {
+  const status = getStatus(error);
+
+  let message =
+    "AI generation failed. Please try again.";
+
+  if (status === 429) {
+    message =
+      "AI rate limit reached. Please wait a moment and try again.";
+  } else if (
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  ) {
+    message =
+      "AI is temporarily busy. Please try again in a few seconds.";
+  } else if (status === 500) {
+    message =
+      "AI server error. Please try again.";
+  }
+
+  sendSSE(res, "error", {
+    success: false,
+    message,
+    status,
+  });
+
+  res.end();
+}
 
 export default async function handler(req, res) {
-  /*
-  ---------------------------------------------------------
-  Method
-  ---------------------------------------------------------
-  */
-
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
       error: "Method not allowed.",
     });
   }
-
-  /*
-  ---------------------------------------------------------
-  Environment
-  ---------------------------------------------------------
-  */
 
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -443,11 +362,7 @@ export default async function handler(req, res) {
     });
   }
 
-  /*
-  ---------------------------------------------------------
-  Headers
-  ---------------------------------------------------------
-  */
+  res.statusCode = 200;
 
   res.setHeader(
     "Content-Type",
@@ -469,11 +384,9 @@ export default async function handler(req, res) {
     "no"
   );
 
-  /*
-  ---------------------------------------------------------
-  Body
-  ---------------------------------------------------------
-  */
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
 
   const body = req.body || {};
 
@@ -483,7 +396,8 @@ export default async function handler(req, res) {
       : "";
 
   if (!prompt) {
-    sendEvent(res, "error", {
+    sendSSE(res, "error", {
+      success: false,
       message: "Please enter a website request.",
     });
 
@@ -491,20 +405,15 @@ export default async function handler(req, res) {
   }
 
   if (prompt.length > MAX_PROMPT_LENGTH) {
-    sendEvent(res, "error", {
-      message: "Prompt is too long.",
+    sendSSE(res, "error", {
+      success: false,
+      message: "Your prompt is too long.",
     });
 
     return res.end();
   }
 
-  /*
-  ---------------------------------------------------------
-  Prompt
-  ---------------------------------------------------------
-  */
-
-  const existingCode = buildExistingCode(body);
+  const existingCode = getExistingCode(body);
 
   const finalPrompt = `
 USER REQUEST:
@@ -513,9 +422,9 @@ ${prompt}
 
 ${existingCode}
 
-Generate the COMPLETE website.
+Generate the complete website now.
 
-Remember:
+Remember to output ONLY:
 
 <WEB_HTML>
 ...
@@ -530,92 +439,63 @@ Remember:
 </WEB_JS>
 `;
 
-  /*
-  ---------------------------------------------------------
-  Gemini
-  ---------------------------------------------------------
-  */
-
   const ai = new GoogleGenAI({
     apiKey,
   });
 
-  let successfulStream = null;
+  let stream = null;
   let selectedModel = null;
   let lastError = null;
 
-  /*
-  ---------------------------------------------------------
-  Model fallback
-  ---------------------------------------------------------
-  */
-
-  sendEvent(res, "status", {
+  sendSSE(res, "status", {
     stage: "thinking",
     message: "AI is thinking...",
   });
 
+  /*
+  ==========================================================
+  MODEL + RETRY
+  ==========================================================
+  */
+
   for (const model of MODELS) {
-    for (
-      let attempt = 0;
-      attempt <= MAX_RETRIES_PER_MODEL;
-      attempt++
-    ) {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         if (attempt > 0) {
-          const delay = Math.min(
-            1000 * Math.pow(2, attempt - 1),
-            5000
-          );
+          await sleep(700 * attempt);
 
-          sendEvent(res, "status", {
-            stage: "retrying",
-            message: `Retrying AI request...`,
-            attempt,
+          sendSSE(res, "status", {
+            stage: "retry",
+            message: "Retrying connection...",
           });
-
-          await sleep(delay);
         }
 
-        sendEvent(res, "status", {
+        sendSSE(res, "status", {
           stage: "connecting",
-          message: `Connecting to ${model}...`,
+          message: `Connecting to AI...`,
         });
 
-        const timeout = createTimeout(
-          REQUEST_TIMEOUT
-        );
+        stream = await ai.models.generateContentStream({
+          model,
 
-        const streamPromise =
-          ai.models.generateContentStream({
-            model,
-
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  {
-                    text: `${SYSTEM_PROMPT}
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: `${SYSTEM_PROMPT}
 
 ${finalPrompt}`,
-                  },
-                ],
-              },
-            ],
-
-            config: {
-              temperature: 0.65,
-
-              maxOutputTokens: 30000,
+                },
+              ],
             },
-          });
+          ],
 
-        successfulStream = await Promise.race([
-          streamPromise,
-          timeout.promise,
-        ]);
-
-        timeout.clear();
+          config: {
+            temperature: 0.55,
+            maxOutputTokens: MAX_OUTPUT_TOKENS,
+          },
+        });
 
         selectedModel = model;
 
@@ -624,7 +504,7 @@ ${finalPrompt}`,
         lastError = error;
 
         console.error(
-          `[AI] ${model} attempt ${attempt + 1} failed`,
+          `[AI] ${model} attempt ${attempt + 1} failed:`,
           error
         );
 
@@ -634,85 +514,53 @@ ${finalPrompt}`,
       }
     }
 
-    if (successfulStream) {
+    if (stream) {
       break;
     }
   }
 
-  /*
-  ---------------------------------------------------------
-  All models failed
-  ---------------------------------------------------------
-  */
-
-  if (!successfulStream) {
-    const status = getErrorStatus(lastError);
-
-    let message =
-      "AI generation failed. Please try again.";
-
-    if (status === 429) {
-      message =
-        "AI rate limit reached. Please wait a moment and try again.";
-    }
-
-    if (
-      status === 503 ||
-      status === 502 ||
-      status === 504
-    ) {
-      message =
-        "Gemini is temporarily busy. Please try again in a few seconds.";
-    }
-
-    if (status === 500) {
-      message =
-        "Gemini server error. Please try again.";
-    }
-
-    sendEvent(res, "error", {
-      message,
-      status,
-    });
-
-    return res.end();
+  if (!stream) {
+    sendFinalError(res, lastError);
+    return;
   }
 
   /*
-  ---------------------------------------------------------
-  Streaming
-  ---------------------------------------------------------
+  ==========================================================
+  LIVE STREAM
+  ==========================================================
   */
 
   let fullText = "";
 
-  let lastHtmlLength = 0;
-  let lastCssLength = 0;
-  let lastJsLength = 0;
+  let htmlSent = 0;
+  let cssSent = 0;
+  let jsSent = 0;
 
-  let currentStage = "generating";
+  let currentStage = "";
 
-  sendEvent(res, "status", {
+  sendSSE(res, "status", {
     stage: "generating",
-    message: "Generating your website...",
+    message: "Writing your website...",
     model: selectedModel,
   });
 
   try {
-    for await (const chunk of successfulStream) {
+    for await (const chunk of stream) {
       const text =
         typeof chunk?.text === "string"
           ? chunk.text
           : "";
 
-      if (!text) continue;
+      if (!text) {
+        continue;
+      }
 
       fullText += text;
 
       /*
-      -----------------------------------------------------
+      ========================================================
       HTML
-      -----------------------------------------------------
+      ========================================================
       */
 
       const htmlPart = extractSection(
@@ -722,26 +570,23 @@ ${finalPrompt}`,
       );
 
       if (htmlPart) {
-        const html = cleanText(
-          htmlPart.content
-        );
+        const html = cleanSection(htmlPart.content);
 
-        if (html.length > lastHtmlLength) {
-          const delta =
-            html.slice(lastHtmlLength);
+        if (html.length > htmlSent) {
+          const delta = html.slice(htmlSent);
 
-          lastHtmlLength = html.length;
+          htmlSent = html.length;
 
           if (currentStage !== "html") {
             currentStage = "html";
 
-            sendEvent(res, "status", {
+            sendSSE(res, "status", {
               stage: "html",
               message: "Writing HTML...",
             });
           }
 
-          sendEvent(res, "code", {
+          sendSSE(res, "code", {
             type: "html",
             delta,
             value: html,
@@ -751,9 +596,9 @@ ${finalPrompt}`,
       }
 
       /*
-      -----------------------------------------------------
+      ========================================================
       CSS
-      -----------------------------------------------------
+      ========================================================
       */
 
       const cssPart = extractSection(
@@ -763,26 +608,23 @@ ${finalPrompt}`,
       );
 
       if (cssPart) {
-        const css = cleanText(
-          cssPart.content
-        );
+        const css = cleanSection(cssPart.content);
 
-        if (css.length > lastCssLength) {
-          const delta =
-            css.slice(lastCssLength);
+        if (css.length > cssSent) {
+          const delta = css.slice(cssSent);
 
-          lastCssLength = css.length;
+          cssSent = css.length;
 
           if (currentStage !== "css") {
             currentStage = "css";
 
-            sendEvent(res, "status", {
+            sendSSE(res, "status", {
               stage: "css",
               message: "Designing CSS...",
             });
           }
 
-          sendEvent(res, "code", {
+          sendSSE(res, "code", {
             type: "css",
             delta,
             value: css,
@@ -792,9 +634,9 @@ ${finalPrompt}`,
       }
 
       /*
-      -----------------------------------------------------
-      JavaScript
-      -----------------------------------------------------
+      ========================================================
+      JAVASCRIPT
+      ========================================================
       */
 
       const jsPart = extractSection(
@@ -804,26 +646,23 @@ ${finalPrompt}`,
       );
 
       if (jsPart) {
-        const js = cleanText(
-          jsPart.content
-        );
+        const js = cleanSection(jsPart.content);
 
-        if (js.length > lastJsLength) {
-          const delta =
-            js.slice(lastJsLength);
+        if (js.length > jsSent) {
+          const delta = js.slice(jsSent);
 
-          lastJsLength = js.length;
+          jsSent = js.length;
 
           if (currentStage !== "js") {
             currentStage = "js";
 
-            sendEvent(res, "status", {
+            sendSSE(res, "status", {
               stage: "js",
               message: "Adding interactions...",
             });
           }
 
-          sendEvent(res, "code", {
+          sendSSE(res, "code", {
             type: "js",
             delta,
             value: js,
@@ -834,9 +673,9 @@ ${finalPrompt}`,
     }
 
     /*
-    -------------------------------------------------------
-    Final extraction
-    -------------------------------------------------------
+    ========================================================
+    FINAL RESULT
+    ========================================================
     */
 
     const finalHtml =
@@ -861,26 +700,10 @@ ${finalPrompt}`,
       )?.content || "";
 
     const result = {
-      html: cleanText(finalHtml).trim(),
-      css: cleanText(finalCss).trim(),
-      js: cleanText(finalJs).trim(),
+      html: cleanSection(finalHtml),
+      css: cleanSection(finalCss),
+      js: cleanSection(finalJs),
     };
-
-    /*
-    -------------------------------------------------------
-    Validation
-    -------------------------------------------------------
-    */
-
-    if (
-      typeof result.html !== "string" ||
-      typeof result.css !== "string" ||
-      typeof result.js !== "string"
-    ) {
-      throw new Error(
-        "Invalid website structure."
-      );
-    }
 
     if (
       !result.html &&
@@ -892,13 +715,7 @@ ${finalPrompt}`,
       );
     }
 
-    /*
-    -------------------------------------------------------
-    Complete
-    -------------------------------------------------------
-    */
-
-    sendEvent(res, "complete", {
+    sendSSE(res, "complete", {
       success: true,
       model: selectedModel,
       html: result.html,
@@ -909,11 +726,12 @@ ${finalPrompt}`,
     return res.end();
   } catch (error) {
     console.error(
-      "[AI] Streaming error:",
+      "[AI] Streaming generation error:",
       error
     );
 
-    sendEvent(res, "error", {
+    sendSSE(res, "error", {
+      success: false,
       message:
         error?.message ||
         "Streaming generation failed.",

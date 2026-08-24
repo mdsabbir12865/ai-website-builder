@@ -1,73 +1,72 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { supabase } from "../lib/supabase";
 import JSZip from "jszip";
+import { supabase } from "../lib/supabase";
 
 function Builder() {
   const { projectId } = useParams();
   const navigate = useNavigate();
 
-  // =====================================================
-  // PROJECT
-  // =====================================================
-
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // =====================================================
-  // CODE
-  // =====================================================
-
   const [prompt, setPrompt] = useState("");
+
   const [htmlCode, setHtmlCode] = useState("");
   const [cssCode, setCssCode] = useState("");
   const [jsCode, setJsCode] = useState("");
 
-  // =====================================================
-  // UI
-  // =====================================================
-
+  const [activeMode, setActiveMode] = useState("preview");
   const [activeTab, setActiveTab] = useState("html");
-  const [activeMode, setActiveMode] = useState("code");
+
   const [device, setDevice] = useState("desktop");
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(true);
 
-  const [showSettings, setShowSettings] = useState(false);
-  const [showExport, setShowExport] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
-
-  const [previewKey, setPreviewKey] = useState(0);
-
-  // =====================================================
-  // AI STREAMING
-  // =====================================================
-
   const [generating, setGenerating] = useState(false);
-  const [aiStage, setAiStage] = useState("");
-  const [aiMessage, setAiMessage] = useState("");
-  const [aiError, setAiError] = useState("");
-  const [generationModel, setGenerationModel] = useState("");
 
-  const abortControllerRef = useRef(null);
+  const [generationStage, setGenerationStage] =
+    useState("idle");
 
-  // =====================================================
-  // HISTORY
-  // =====================================================
+  const [generationMessage, setGenerationMessage] =
+    useState("");
+
+  const [generationTime, setGenerationTime] =
+    useState(0);
+
+  const [showSettings, setShowSettings] =
+    useState(false);
+
+  const [showExport, setShowExport] =
+    useState(false);
+
+  const [fullscreen, setFullscreen] =
+    useState(false);
+
+  const [previewKey, setPreviewKey] =
+    useState(0);
 
   const [history, setHistory] = useState([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [historyIndex, setHistoryIndex] =
+    useState(-1);
 
-  const historyRef = useRef([]);
-  const historyIndexRef = useRef(-1);
+  const [errorMessage, setErrorMessage] =
+    useState("");
 
-  // =====================================================
-  // LOAD PROJECT
-  // =====================================================
+  const [copied, setCopied] = useState(false);
+
+  const abortControllerRef = useRef(null);
+  const generationTimerRef = useRef(null);
+
+  /*
+  ==========================================================
+  LOAD PROJECT
+  ==========================================================
+  */
 
   useEffect(() => {
-    let cancelled = false;
+    let mounted = true;
 
     async function loadProject() {
       try {
@@ -76,30 +75,51 @@ function Builder() {
         } = await supabase.auth.getUser();
 
         if (!user) {
-          navigate("/login", { replace: true });
+          navigate("/login", {
+            replace: true,
+          });
+
           return;
         }
 
-        const { data, error } = await supabase
-          .from("projects")
-          .select("*")
-          .eq("id", projectId)
-          .eq("user_id", user.id)
-          .single();
-
-        if (cancelled) return;
+        const { data, error } =
+          await supabase
+            .from("projects")
+            .select("*")
+            .eq("id", projectId)
+            .eq("user_id", user.id)
+            .single();
 
         if (error) {
-          console.error("Project loading error:", error);
-          setLoading(false);
+          console.error(
+            "Project loading error:",
+            error
+          );
+
+          if (mounted) {
+            setLoading(false);
+          }
+
           return;
         }
 
+        if (!mounted) return;
+
         setProject(data);
+
         setPrompt(data.prompt || "");
-        setHtmlCode(data.html_code || "");
-        setCssCode(data.css_code || "");
-        setJsCode(data.js_code || "");
+
+        setHtmlCode(
+          data.html_code || ""
+        );
+
+        setCssCode(
+          data.css_code || ""
+        );
+
+        setJsCode(
+          data.js_code || ""
+        );
 
         const initialState = {
           html: data.html_code || "",
@@ -107,229 +127,340 @@ function Builder() {
           js: data.js_code || "",
         };
 
-        historyRef.current = [initialState];
-        historyIndexRef.current = 0;
-
         setHistory([initialState]);
         setHistoryIndex(0);
 
         setSaved(true);
         setLoading(false);
       } catch (error) {
-        console.error("Project load error:", error);
-        setLoading(false);
+        console.error(
+          "Project loading error:",
+          error
+        );
+
+        if (mounted) {
+          setLoading(false);
+        }
       }
     }
 
     loadProject();
 
     return () => {
-      cancelled = true;
+      mounted = false;
     };
   }, [projectId, navigate]);
 
-  // =====================================================
-  // CURRENT STATE
-  // =====================================================
+  /*
+  ==========================================================
+  CLEANUP
+  ==========================================================
+  */
 
-  const getCurrentCode = useCallback(() => {
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      if (generationTimerRef.current) {
+        clearInterval(
+          generationTimerRef.current
+        );
+      }
+    };
+  }, []);
+
+  /*
+  ==========================================================
+  GENERATION TIMER
+  ==========================================================
+  */
+
+  function startGenerationTimer() {
+    setGenerationTime(0);
+
+    if (generationTimerRef.current) {
+      clearInterval(
+        generationTimerRef.current
+      );
+    }
+
+    generationTimerRef.current =
+      setInterval(() => {
+        setGenerationTime(
+          (previous) => previous + 1
+        );
+      }, 1000);
+  }
+
+  function stopGenerationTimer() {
+    if (generationTimerRef.current) {
+      clearInterval(
+        generationTimerRef.current
+      );
+
+      generationTimerRef.current = null;
+    }
+  }
+
+  /*
+  ==========================================================
+  CURRENT STATE
+  ==========================================================
+  */
+
+  function getCurrentState() {
     return {
       html: htmlCode,
       css: cssCode,
       js: jsCode,
     };
-  }, [htmlCode, cssCode, jsCode]);
-
-  // =====================================================
-  // HISTORY
-  // =====================================================
-
-  function pushHistory(nextState) {
-    const currentHistory = historyRef.current;
-    const currentIndex = historyIndexRef.current;
-
-    const trimmed = currentHistory.slice(
-      0,
-      currentIndex + 1
-    );
-
-    const last = trimmed[trimmed.length - 1];
-
-    if (
-      last &&
-      last.html === nextState.html &&
-      last.css === nextState.css &&
-      last.js === nextState.js
-    ) {
-      return;
-    }
-
-    const newHistory = [
-      ...trimmed,
-      nextState,
-    ].slice(-50);
-
-    const newIndex = newHistory.length - 1;
-
-    historyRef.current = newHistory;
-    historyIndexRef.current = newIndex;
-
-    setHistory(newHistory);
-    setHistoryIndex(newIndex);
   }
 
-  function markChanged(nextState = null) {
-    setSaved(false);
+  /*
+  ==========================================================
+  HISTORY
+  ==========================================================
+  */
 
-    if (nextState) {
-      pushHistory(nextState);
-    }
+  function pushHistory(state) {
+    setHistory((previous) => {
+      const base =
+        historyIndex >= 0
+          ? previous.slice(
+              0,
+              historyIndex + 1
+            )
+          : previous;
+
+      const last =
+        base[base.length - 1];
+
+      if (
+        last &&
+        last.html === state.html &&
+        last.css === state.css &&
+        last.js === state.js
+      ) {
+        return base;
+      }
+
+      const next = [
+        ...base,
+        state,
+      ].slice(-30);
+
+      return next;
+    });
+
+    setHistoryIndex((previous) => {
+      return Math.min(
+        previous + 1,
+        29
+      );
+    });
   }
 
   function handleUndo() {
-    const currentIndex = historyIndexRef.current;
+    if (historyIndex <= 0) {
+      return;
+    }
 
-    if (currentIndex <= 0) return;
+    const previous =
+      history[historyIndex - 1];
 
-    const newIndex = currentIndex - 1;
-    const previous = historyRef.current[newIndex];
-
-    historyIndexRef.current = newIndex;
-
-    setHistoryIndex(newIndex);
+    if (!previous) return;
 
     setHtmlCode(previous.html);
     setCssCode(previous.css);
     setJsCode(previous.js);
 
+    setHistoryIndex(
+      historyIndex - 1
+    );
+
     setSaved(false);
-    setPreviewKey((value) => value + 1);
+    setPreviewKey(
+      (value) => value + 1
+    );
   }
 
   function handleRedo() {
-    const currentIndex = historyIndexRef.current;
-
     if (
-      currentIndex >=
-      historyRef.current.length - 1
+      historyIndex >=
+      history.length - 1
     ) {
       return;
     }
 
-    const newIndex = currentIndex + 1;
-    const next = historyRef.current[newIndex];
+    const next =
+      history[historyIndex + 1];
 
-    historyIndexRef.current = newIndex;
-
-    setHistoryIndex(newIndex);
+    if (!next) return;
 
     setHtmlCode(next.html);
     setCssCode(next.css);
     setJsCode(next.js);
 
+    setHistoryIndex(
+      historyIndex + 1
+    );
+
     setSaved(false);
-    setPreviewKey((value) => value + 1);
+    setPreviewKey(
+      (value) => value + 1
+    );
   }
 
-  // =====================================================
-  // SAVE
-  // =====================================================
+  /*
+  ==========================================================
+  MANUAL CODE CHANGE
+  ==========================================================
+  */
+
+  function updateHtml(value) {
+    setHtmlCode(value);
+    setSaved(false);
+  }
+
+  function updateCss(value) {
+    setCssCode(value);
+    setSaved(false);
+  }
+
+  function updateJs(value) {
+    setJsCode(value);
+    setSaved(false);
+  }
+
+  /*
+  ==========================================================
+  SAVE
+  ==========================================================
+  */
 
   async function handleSave() {
-    if (!projectId || saving) return;
+    if (!projectId) return;
 
     setSaving(true);
 
-    try {
-      const { error } = await supabase
+    const { error } =
+      await supabase
         .from("projects")
         .update({
           prompt,
           html_code: htmlCode,
           css_code: cssCode,
           js_code: jsCode,
-          updated_at: new Date().toISOString(),
+          updated_at:
+            new Date().toISOString(),
         })
         .eq("id", projectId);
 
-      if (error) {
-        throw error;
-      }
+    setSaving(false);
 
-      setSaved(true);
-    } catch (error) {
-      console.error("Save error:", error);
-      alert(
-        error?.message ||
-        "Save failed. Please try again."
+    if (error) {
+      console.error(
+        "Save error:",
+        error
       );
-    } finally {
-      setSaving(false);
+
+      alert("Save failed.");
+      return;
     }
+
+    setSaved(true);
   }
 
-  // =====================================================
-  // SSE PARSER
-  // =====================================================
-async function* readSSEStream(response) {
+  /*
+  ==========================================================
+  SSE PARSER
+  ==========================================================
+  */
+
+  async function* readSSEStream(
+    response
+  ) {
     if (!response.body) {
       throw new Error(
-        "Streaming is not supported by this response."
+        "Streaming is not supported by this connection."
       );
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
+    const reader =
+      response.body.getReader();
+
+    const decoder =
+      new TextDecoder("utf-8");
 
     let buffer = "";
 
     while (true) {
-      const { value, done } =
-        await reader.read();
+      const {
+        value,
+        done,
+      } = await reader.read();
 
-      if (done) break;
+      if (done) {
+        break;
+      }
 
-      buffer += decoder.decode(value, {
-        stream: true,
-      });
-
-      const events = buffer.split(
-        "\n\n"
+      buffer += decoder.decode(
+        value,
+        {
+          stream: true,
+        }
       );
 
-      buffer = events.pop() || "";
+      const events =
+        buffer.split("\n\n");
 
-      for (const rawEvent of events) {
-        const lines = rawEvent.split("\n");
+      buffer =
+        events.pop() || "";
+
+      for (const eventBlock of events) {
+        const lines =
+          eventBlock.split("\n");
 
         let eventName = "message";
         let dataText = "";
 
         for (const line of lines) {
-          if (line.startsWith("event:")) {
-            eventName = line
-              .slice(6)
-              .trim();
+          if (
+            line.startsWith("event:")
+          ) {
+            eventName =
+              line
+                .slice(6)
+                .trim();
           }
 
-          if (line.startsWith("data:")) {
-            dataText += line
-              .slice(5)
-              .trim();
+          if (
+            line.startsWith("data:")
+          ) {
+            dataText +=
+              line
+                .slice(5)
+                .trim();
           }
         }
 
-        if (!dataText) continue;
+        if (!dataText) {
+          continue;
+        }
 
         let data;
 
         try {
-          data = JSON.parse(dataText);
+          data =
+            JSON.parse(dataText);
         } catch {
           console.warn(
             "Invalid SSE data:",
             dataText
           );
+
           continue;
         }
 
@@ -340,23 +471,36 @@ async function* readSSEStream(response) {
       }
     }
 
+    /*
+    ========================================================
+    FINAL BUFFER
+    ========================================================
+    */
+
     if (buffer.trim()) {
-      const lines = buffer.split("\n");
+      const lines =
+        buffer.split("\n");
 
       let eventName = "message";
       let dataText = "";
 
       for (const line of lines) {
-        if (line.startsWith("event:")) {
-          eventName = line
-            .slice(6)
-            .trim();
+        if (
+          line.startsWith("event:")
+        ) {
+          eventName =
+            line
+              .slice(6)
+              .trim();
         }
 
-        if (line.startsWith("data:")) {
-          dataText += line
-            .slice(5)
-            .trim();
+        if (
+          line.startsWith("data:")
+        ) {
+          dataText +=
+            line
+              .slice(5)
+              .trim();
         }
       }
 
@@ -364,36 +508,65 @@ async function* readSSEStream(response) {
         try {
           yield {
             event: eventName,
-            data: JSON.parse(dataText),
+            data:
+              JSON.parse(dataText),
           };
         } catch {
-          // Ignore incomplete final chunk.
+          // Ignore incomplete final event.
         }
       }
     }
   }
 
-  // =====================================================
-  // GENERATE WEBSITE
-  // =====================================================
+  /*
+  ==========================================================
+  GENERATE WEBSITE
+  ==========================================================
+  */
 
   async function handleGenerate() {
-    if (generating) return;
-
-    const cleanPrompt = prompt.trim();
-
-    if (!cleanPrompt) {
+    if (!prompt.trim()) {
       alert(
         "Please describe what you want to build."
       );
+
+      return;
+    }
+
+    if (generating) {
       return;
     }
 
     setGenerating(true);
-    setAiError("");
-    setAiStage("thinking");
-    setAiMessage("AI is thinking...");
-    setGenerationModel("");
+    setErrorMessage("");
+    setSaved(false);
+
+    setGenerationStage(
+      "thinking"
+    );
+
+    setGenerationMessage(
+      "AI is thinking..."
+    );
+
+    setActiveMode("code");
+    setActiveTab("html");
+
+    /*
+    --------------------------------------------------------
+    Clear current code
+    --------------------------------------------------------
+    */
+
+    setHtmlCode("");
+    setCssCode("");
+    setJsCode("");
+
+    /*
+    --------------------------------------------------------
+    Abort controller
+    --------------------------------------------------------
+    */
 
     const controller =
       new AbortController();
@@ -401,145 +574,177 @@ async function* readSSEStream(response) {
     abortControllerRef.current =
       controller;
 
-    const oldCode = getCurrentCode();
-
-    let streamedHtml = "";
-    let streamedCss = "";
-    let streamedJs = "";
+    startGenerationTimer();
 
     try {
-      const response = await fetch(
-        "/api/generate-stream",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-            Accept:
-              "text/event-stream",
-          },
-          body: JSON.stringify({
-            prompt: cleanPrompt,
-            currentCode: oldCode,
-          }),
-          signal: controller.signal,
-        }
-      );
+      const response =
+        await fetch(
+          "/api/generate-stream",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+              Accept:
+                "text/event-stream",
+            },
+
+            body: JSON.stringify({
+              prompt,
+
+              currentCode: {
+                html: htmlCode,
+                css: cssCode,
+                js: jsCode,
+              },
+            }),
+
+            signal:
+              controller.signal,
+          }
+        );
 
       if (!response.ok) {
         let message =
-          `Server error (${response.status})`;
+          "AI generation failed.";
 
         try {
-          const text =
-            await response.text();
+          const errorData =
+            await response.json();
 
-          if (text) {
-            try {
-              const parsed =
-                JSON.parse(text);
-
-              message =
-                parsed.error ||
-                parsed.message ||
-                message;
-            } catch {
-              if (text.length < 500) {
-                message = text;
-              }
-            }
-          }
+          message =
+            errorData.error ||
+            errorData.message ||
+            message;
         } catch {
-          // Ignore response parsing error.
+          // Response was not JSON.
         }
 
         throw new Error(message);
       }
 
+      let streamedHtml = "";
+      let streamedCss = "";
+      let streamedJs = "";
+
       for await (
-        const packet of readSSEStream(
+        const item of readSSEStream(
           response
         )
       ) {
-        const { event, data } =
-          packet;
+        const {
+          event,
+          data,
+        } = item;
 
-        // ---------------------------------------------
-        // STATUS
-        // ---------------------------------------------
+        /*
+        ======================================================
+        STATUS
+        ======================================================
+        */
 
         if (event === "status") {
-          setAiStage(
-            data.stage || "generating"
+          setGenerationStage(
+            data.stage ||
+              "generating"
           );
 
-          setAiMessage(
+          setGenerationMessage(
             data.message ||
-            "Generating..."
+              "Generating..."
           );
 
-          if (data.model) {
-            setGenerationModel(
-              data.model
-            );
+          if (
+            data.stage === "html"
+          ) {
+            setActiveTab("html");
           }
 
-          continue;
+          if (
+            data.stage === "css"
+          ) {
+            setActiveTab("css");
+          }
+
+          if (
+            data.stage === "js"
+          ) {
+            setActiveTab("js");
+          }
         }
 
-        // ---------------------------------------------
-        // CODE
-        // ---------------------------------------------
+        /*
+        ======================================================
+        CODE STREAM
+        ======================================================
+        */
 
         if (event === "code") {
-          const type = data.type;
+          const type =
+            data.type;
+
+          const value =
+            typeof data.value ===
+            "string"
+              ? data.value
+              : "";
 
           if (type === "html") {
             streamedHtml =
-              data.value ||
-              streamedHtml +
-                (data.delta || "");
+              value;
 
             setHtmlCode(
               streamedHtml
+            );
+
+            setActiveTab(
+              "html"
             );
           }
 
           if (type === "css") {
             streamedCss =
-              data.value ||
-              streamedCss +
-                (data.delta || "");
+              value;
 
             setCssCode(
               streamedCss
+            );
+
+            setActiveTab(
+              "css"
             );
           }
 
           if (type === "js") {
             streamedJs =
-              data.value ||
-              streamedJs +
-                (data.delta || "");
+              value;
 
             setJsCode(
               streamedJs
             );
+
+            setActiveTab(
+              "js"
+            );
           }
 
-          setSaved(false);
+          /*
+          ----------------------------------------------------
+          Automatically switch to preview occasionally
+          ----------------------------------------------------
+          */
 
-          // Live preview update
           setPreviewKey(
             (value) => value + 1
           );
-
-          continue;
         }
 
-        // ---------------------------------------------
-        // COMPLETE
-        // ---------------------------------------------
+        /*
+        ======================================================
+        COMPLETE
+        ======================================================
+        */
 
         if (event === "complete") {
           const finalHtml =
@@ -557,9 +762,17 @@ async function* readSSEStream(response) {
             streamedJs ||
             "";
 
-          setHtmlCode(finalHtml);
-          setCssCode(finalCss);
-          setJsCode(finalJs);
+          setHtmlCode(
+            finalHtml
+          );
+
+          setCssCode(
+            finalCss
+          );
+
+          setJsCode(
+            finalJs
+          );
 
           pushHistory({
             html: finalHtml,
@@ -567,37 +780,33 @@ async function* readSSEStream(response) {
             js: finalJs,
           });
 
-          setSaved(false);
-
-          setAiStage("complete");
-          setAiMessage(
-            "Website generated successfully."
+          setGenerationStage(
+            "complete"
           );
 
-          if (data.model) {
-            setGenerationModel(
-              data.model
-            );
-          }
+          setGenerationMessage(
+            "Website ready"
+          );
+
+          setActiveMode(
+            "preview"
+          );
 
           setPreviewKey(
             (value) => value + 1
           );
-
-          // Automatically show preview
-          setActiveMode("preview");
-
-          continue;
         }
 
-        // ---------------------------------------------
-        // ERROR
-        // ---------------------------------------------
+        /*
+        ======================================================
+        ERROR
+        ======================================================
+        */
 
         if (event === "error") {
           throw new Error(
             data.message ||
-            "AI generation failed."
+              "AI generation failed."
           );
         }
       }
@@ -606,36 +815,52 @@ async function* readSSEStream(response) {
         error?.name ===
         "AbortError"
       ) {
-        setAiStage("stopped");
-        setAiMessage(
+        setGenerationStage(
+          "stopped"
+        );
+
+        setGenerationMessage(
           "Generation stopped."
         );
       } else {
         console.error(
-          "AI streaming error:",
+          "AI Generate Error:",
           error
         );
 
-        const message =
+        setErrorMessage(
           error?.message ||
-          "Something went wrong while generating.";
+            "Something went wrong."
+        );
 
-        setAiError(message);
-        setAiStage("error");
-        setAiMessage(
+        setGenerationStage(
+          "error"
+        );
+
+        setGenerationMessage(
           "Generation failed."
+        );
+
+        alert(
+          error?.message ||
+            "AI generation failed."
         );
       }
     } finally {
+      stopGenerationTimer();
+
       setGenerating(false);
+
       abortControllerRef.current =
         null;
     }
   }
 
-  // =====================================================
-  // STOP GENERATION
-  // =====================================================
+  /*
+  ==========================================================
+  STOP GENERATION
+  ==========================================================
+  */
 
   function handleStopGeneration() {
     if (
@@ -645,40 +870,36 @@ async function* readSSEStream(response) {
     }
   }
 
-  // =====================================================
-  // RETRY
-  // =====================================================
-
-  function handleRetry() {
-    if (generating) return;
-
-    setAiError("");
-    handleGenerate();
-  }
-
-  // =====================================================
-  // ZIP EXPORT
-  // =====================================================
+  /*
+  ==========================================================
+  ZIP EXPORT
+  ==========================================================
+  */
 
   async function handleDownloadZip() {
-    if (!project) return;
-
     try {
-      const zip = new JSZip();
+      const zip =
+        new JSZip();
 
-      const html = `<!DOCTYPE html>
+      const html =
+`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${project.name || "My Website"}</title>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+  <title>${project?.name || "My Website"}</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
 ${htmlCode}
 
 <script src="script.js"></script>
+
 </body>
 </html>`;
 
@@ -703,25 +924,36 @@ ${htmlCode}
         });
 
       const url =
-        URL.createObjectURL(blob);
+        URL.createObjectURL(
+          blob
+        );
 
       const link =
-        document.createElement("a");
+        document.createElement(
+          "a"
+        );
 
       link.href = url;
 
       link.download =
-        `${project.name || "website"}.zip`;
+        `${
+          project?.name ||
+          "website"
+        }.zip`;
 
-      document.body.appendChild(link);
+      document.body.appendChild(
+        link
+      );
 
       link.click();
 
-      link.remove();
+      document.body.removeChild(
+        link
+      );
 
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-      }, 1000);
+      URL.revokeObjectURL(
+        url
+      );
     } catch (error) {
       console.error(
         "ZIP export error:",
@@ -734,30 +966,37 @@ ${htmlCode}
     }
   }
 
-  // =====================================================
-  // CODE EXPORT
-  // =====================================================
+  /*
+  ==========================================================
+  EXPORT CODE
+  ==========================================================
+  */
 
   function handleExportCode() {
-    if (!project) return;
-
-    const html = `<!DOCTYPE html>
+    const html =
+`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${project.name || "My Website"}</title>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+  <title>${project?.name || "My Website"}</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
 ${htmlCode}
 
 <script src="script.js"></script>
+
 </body>
 </html>`;
 
-    const code = `===== index.html =====
+    const code =
+`===== index.html =====
 
 ${html}
 
@@ -772,46 +1011,97 @@ ${cssCode}
 ${jsCode}
 `;
 
-    const blob = new Blob(
-      [code],
-      {
-        type:
-          "text/plain;charset=utf-8",
-      }
-    );
+    const blob =
+      new Blob(
+        [code],
+        {
+          type:
+            "text/plain;charset=utf-8",
+        }
+      );
 
     const url =
-      URL.createObjectURL(blob);
+      URL.createObjectURL(
+        blob
+      );
 
     const link =
-      document.createElement("a");
+      document.createElement(
+        "a"
+      );
 
     link.href = url;
 
     link.download =
-      `${project.name || "website"}-code.txt`;
+      `${
+        project?.name ||
+        "website"
+      }-code.txt`;
 
-    document.body.appendChild(link);
+    document.body.appendChild(
+      link
+    );
 
     link.click();
 
-    link.remove();
+    document.body.removeChild(
+      link
+    );
 
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 1000);
+    URL.revokeObjectURL(
+      url
+    );
   }
 
-  // =====================================================
-  // PREVIEW
-  // =====================================================
+  /*
+  ==========================================================
+  COPY CODE
+  ==========================================================
+  */
 
-  const previewDocument = `
-<!DOCTYPE html>
+  async function handleCopyCode() {
+    const code =
+      activeTab === "html"
+        ? htmlCode
+        : activeTab === "css"
+        ? cssCode
+        : jsCode;
+
+    try {
+      await navigator.clipboard.writeText(
+        code
+      );
+
+      setCopied(true);
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 1500);
+    } catch {
+      alert(
+        "Copy failed."
+      );
+    }
+  }
+
+  /*
+  ==========================================================
+  PREVIEW DOCUMENT
+  ==========================================================
+  */
+
+  const previewDocument =
+`<!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
 
 <style>
 
@@ -821,7 +1111,6 @@ body {
   padding: 0;
   min-height: 100%;
   overflow-x: hidden;
-  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -832,6 +1121,7 @@ body {
 ${cssCode || ""}
 
 </style>
+
 </head>
 
 <body>
@@ -839,16 +1129,44 @@ ${cssCode || ""}
 ${htmlCode || ""}
 
 <script>
+
+try {
+
 ${jsCode || ""}
+
+} catch (error) {
+
+console.error(
+  "Preview JavaScript error:",
+  error
+);
+
+}
+
 <\/script>
 
 </body>
-</html>
-`;
 
-  // =====================================================
-  // LOADING
-  // =====================================================
+</html>`;
+
+  /*
+  ==========================================================
+  CODE LENGTH
+  ==========================================================
+  */
+
+  const currentCodeLength =
+    activeTab === "html"
+      ? htmlCode.length
+      : activeTab === "css"
+      ? cssCode.length
+      : jsCode.length;
+
+  /*
+  ==========================================================
+  LOADING SCREEN
+  ==========================================================
+  */
 
   if (loading) {
     return (
@@ -868,9 +1186,11 @@ ${jsCode || ""}
     );
   }
 
-  // =====================================================
-  // PROJECT ERROR
-  // =====================================================
+  /*
+  ==========================================================
+  PROJECT ERROR
+  ==========================================================
+  */
 
   if (!project) {
     return (
@@ -884,13 +1204,15 @@ ${jsCode || ""}
         </h2>
 
         <p>
-          This project may have been
-          deleted or moved.
+          This project may have
+          been deleted or moved.
         </p>
 
         <button
           onClick={() =>
-            navigate("/dashboard")
+            navigate(
+              "/dashboard"
+            )
           }
         >
           ← Back to Dashboard
@@ -899,9 +1221,11 @@ ${jsCode || ""}
     );
   }
 
-  // =====================================================
-  // UI
-  // =====================================================
+  /*
+  ==========================================================
+  MAIN UI
+  ==========================================================
+  */
 
   return (
     <div
@@ -912,9 +1236,9 @@ ${jsCode || ""}
       }`}
     >
 
-      {/* =================================================
+      {/* ====================================================
           TOP BAR
-      ================================================= */}
+      ==================================================== */}
 
       <header className="builder-topbar">
 
@@ -923,7 +1247,9 @@ ${jsCode || ""}
           <button
             className="builder-back"
             onClick={() =>
-              navigate("/dashboard")
+              navigate(
+                "/dashboard"
+              )
             }
             title="Back"
           >
@@ -964,7 +1290,7 @@ ${jsCode || ""}
 
         </div>
 
-        {/* MODE */}
+        {/* CENTER */}
 
         <div className="builder-center-controls">
 
@@ -986,12 +1312,15 @@ ${jsCode || ""}
 
           <button
             className={
-              activeMode === "code"
+              activeMode ===
+              "code"
                 ? "mode-btn active"
                 : "mode-btn"
             }
             onClick={() =>
-              setActiveMode("code")
+              setActiveMode(
+                "code"
+              )
             }
           >
             &lt;/&gt; Code
@@ -1023,8 +1352,7 @@ ${jsCode || ""}
               handleUndo
             }
             disabled={
-              historyIndex <= 0 ||
-              generating
+              historyIndex <= 0
             }
           >
             ↶
@@ -1038,8 +1366,7 @@ ${jsCode || ""}
             }
             disabled={
               historyIndex >=
-                history.length - 1 ||
-              generating
+              history.length - 1
             }
           >
             ↷
@@ -1075,9 +1402,9 @@ ${jsCode || ""}
 
       </header>
 
-      {/* =================================================
-          EXPORT
-      ================================================= */}
+      {/* ====================================================
+          EXPORT MENU
+      ==================================================== */}
 
       {showExport && (
         <div className="export-menu">
@@ -1091,8 +1418,7 @@ ${jsCode || ""}
               handleDownloadZip
             }
           >
-            <span>↓</span>
-            Download ZIP
+            ↓ Download ZIP
           </button>
 
           <button
@@ -1100,23 +1426,18 @@ ${jsCode || ""}
               handleExportCode
             }
           >
-            <span>
-              &lt;/&gt;
-            </span>
-            Export Code
+            &lt;/&gt; Export Code
           </button>
 
-          <button disabled>
-            <span>◆</span>
-            GitHub
+          <button>
+            ◇ GitHub
             <small>
               Coming soon
             </small>
           </button>
 
-          <button disabled>
-            <span>▲</span>
-            Vercel
+          <button>
+            ▲ Vercel
             <small>
               Coming soon
             </small>
@@ -1125,15 +1446,15 @@ ${jsCode || ""}
         </div>
       )}
 
-      {/* =================================================
-          MAIN
-      ================================================= */}
+      {/* ====================================================
+          WORKSPACE
+      ==================================================== */}
 
       <main className="builder-workspace">
 
-        {/* =================================================
-            LEFT AI PANEL
-        ================================================= */}
+        {/* ==================================================
+            AI SIDEBAR
+        ================================================== */}
 
         <aside className="builder-left">
 
@@ -1155,140 +1476,54 @@ ${jsCode || ""}
 
           </div>
 
+          {/* AI STATUS */}
+
           <div className="ai-status">
 
             <span
               className={
                 generating
                   ? "status-dot generating"
-                  : aiError
-                  ? "status-dot error"
                   : "status-dot"
               }
             />
 
             {generating
-              ? aiMessage ||
-                "Generating..."
-              : aiError
-              ? "AI Error"
+              ? generationMessage ||
+                "AI Working..."
               : "AI Ready"}
 
           </div>
-
-          {/* AI PROGRESS */}
-
-          {(generating ||
-            aiStage ===
-              "complete" ||
-            aiError) && (
-            <div className="ai-progress">
-
-              <div className="ai-progress-header">
-
-                <span>
-                  {generating
-                    ? "GENERATING"
-                    : aiStage ===
-                      "complete"
-                    ? "COMPLETED"
-                    : "ERROR"}
-                </span>
-
-                {generationModel && (
-                  <small>
-                    {generationModel}
-                  </small>
-                )}
-
-              </div>
-
-              <div className="ai-progress-bar">
-
-                <div
-                  className={
-                    generating
-                      ? "ai-progress-fill running"
-                      : "ai-progress-fill"
-                  }
-                />
-
-              </div>
-
-              <p>
-                {aiMessage}
-              </p>
-
-            </div>
-          )}
-
-          {/* ERROR */}
-
-          {aiError && (
-            <div className="ai-error">
-
-              <strong>
-                Generation failed
-              </strong>
-
-              <p>
-                {aiError}
-              </p>
-
-              <div className="ai-error-actions">
-
-                <button
-                  onClick={
-                    handleRetry
-                  }
-                >
-                  Retry
-                </button>
-
-                <button
-                  onClick={() =>
-                    setAiError("")
-                  }
-                >
-                  Dismiss
-                </button>
-
-              </div>
-
-            </div>
-          )}
 
           {/* PROMPT */}
 
           <textarea
             className="ai-prompt"
             value={prompt}
-            onChange={(e) => {
+            onChange={(event) => {
               setPrompt(
-                e.target.value
+                event.target.value
               );
+
               setSaved(false);
             }}
-            disabled={generating}
             placeholder="Describe what you want to build..."
+            disabled={generating}
           />
 
-          {/* GENERATE / STOP */}
+          <div className="prompt-meta">
+            <span>
+              {prompt.length}/10000
+            </span>
 
-          {generating ? (
-            <button
-              className="generate-button generating-button"
-              onClick={
-                handleStopGeneration
-              }
-            >
-              <span>
-                ■
-              </span>
+            <span>
+              AI Website Generator
+            </span>
+          </div>
 
-              Stop Generation
-            </button>
-          ) : (
+          {/* GENERATE */}
+
+          {!generating ? (
             <button
               className="generate-button"
               onClick={
@@ -1301,6 +1536,101 @@ ${jsCode || ""}
 
               Generate Website
             </button>
+          ) : (
+            <button
+              className="generate-button stop"
+              onClick={
+                handleStopGeneration
+              }
+            >
+              <span>
+                ■
+              </span>
+
+              Stop Generation
+            </button>
+          )}
+
+          {/* GENERATION PROGRESS */}
+
+          {generating && (
+            <div className="generation-panel">
+
+              <div className="generation-header">
+
+                <span>
+                  AI GENERATION
+                </span>
+
+                <strong>
+                  {generationTime}s
+                </strong>
+
+              </div>
+
+              <div className="generation-line">
+                <div className="generation-pulse" />
+              </div>
+
+              <div className="generation-stage">
+
+                <span>
+                  {generationStage ===
+                    "thinking" &&
+                    "🧠"}
+
+                  {generationStage ===
+                    "html" &&
+                    "⌨️"}
+
+                  {generationStage ===
+                    "css" &&
+                    "🎨"}
+
+                  {generationStage ===
+                    "js" &&
+                    "⚡"}
+
+                  {generationStage ===
+                    "connecting" &&
+                    "🔗"}
+
+                  {generationStage ===
+                    "retry" &&
+                    "↻"}
+                </span>
+
+                <div>
+
+                  <strong>
+                    {generationMessage ||
+                      "Generating..."}
+                  </strong>
+
+                  <small>
+                    Code is appearing
+                    live
+                  </small>
+
+                </div>
+
+              </div>
+
+            </div>
+          )}
+
+          {/* ERROR */}
+
+          {errorMessage && (
+            <div className="ai-error">
+              <strong>
+                Generation error
+              </strong>
+
+              <p>
+                {errorMessage}
+              </p>
+            </div>
           )}
 
           {/* QUICK ACTIONS */}
@@ -1312,10 +1642,9 @@ ${jsCode || ""}
             </div>
 
             <button
-              disabled={generating}
               onClick={() =>
                 setPrompt(
-                  "Make the website modern and professional"
+                  "Make the website modern, premium and professional"
                 )
               }
             >
@@ -1323,10 +1652,9 @@ ${jsCode || ""}
             </button>
 
             <button
-              disabled={generating}
               onClick={() =>
                 setPrompt(
-                  "Create a beautiful responsive mobile design"
+                  "Create a beautiful responsive mobile-first design"
                 )
               }
             >
@@ -1334,36 +1662,33 @@ ${jsCode || ""}
             </button>
 
             <button
-              disabled={generating}
               onClick={() =>
                 setPrompt(
-                  "Improve the typography, spacing and visual hierarchy"
+                  "Improve typography, spacing, colors and visual hierarchy"
                 )
               }
             >
-              Aa Improve typography
+              Aa Improve design
             </button>
 
             <button
-              disabled={generating}
               onClick={() =>
                 setPrompt(
                   "Add smooth animations and useful interactions"
                 )
               }
             >
-              ◈ Add animations
+              ◈ Add interactions
             </button>
 
             <button
-              disabled={generating}
               onClick={() =>
                 setPrompt(
-                  "Make the website look premium and production-ready"
+                  "Create a premium ecommerce store with products, cart UI, categories and responsive design"
                 )
               }
             >
-              ✦ Make it premium
+              🛍️ Store website
             </button>
 
           </div>
@@ -1377,10 +1702,10 @@ ${jsCode || ""}
             </span>
 
             <p>
-              Be specific about colors,
-              sections, style,
-              functionality and target
-              audience for better results.
+              Be specific about
+              colors, sections,
+              style and functionality
+              for better results.
             </p>
 
           </div>
@@ -1400,9 +1725,9 @@ ${jsCode || ""}
 
         </aside>
 
-        {/* =================================================
+        {/* ==================================================
             CODE EDITOR
-        ================================================= */}
+        ================================================== */}
 
         {activeMode ===
           "code" && (
@@ -1414,13 +1739,9 @@ ${jsCode || ""}
 
                 <span className="live-dot" />
 
-                Code Editor
-
-                {generating && (
-                  <span className="typing-indicator">
-                    AI writing...
-                  </span>
-                )}
+                {generating
+                  ? "AI Live Code"
+                  : "Code Editor"}
 
               </div>
 
@@ -1479,6 +1800,17 @@ ${jsCode || ""}
               <div className="editor-actions">
 
                 <button
+                  title="Copy"
+                  onClick={
+                    handleCopyCode
+                  }
+                >
+                  {copied
+                    ? "✓"
+                    : "⧉"}
+                </button>
+
+                <button
                   title="Refresh Preview"
                   onClick={() =>
                     setPreviewKey(
@@ -1490,44 +1822,34 @@ ${jsCode || ""}
                   ↻
                 </button>
 
-                <button
-                  title="Clear current editor"
-                  onClick={() => {
-
-                    if (
-                      generating
-                    )
-                      return;
-
-                    const next = {
-                      ...getCurrentCode(),
-                      [activeTab]:
-                        "",
-                    };
-
-                    setHtmlCode(
-                      next.html
-                    );
-
-                    setCssCode(
-                      next.css
-                    );
-
-                    setJsCode(
-                      next.js
-                    );
-
-                    markChanged(
-                      next
-                    );
-                  }}
-                >
-                  ×
-                </button>
-
               </div>
 
             </div>
+
+            {/* LIVE GENERATION BAR */}
+
+            {generating && (
+              <div className="live-generation-bar">
+
+                <div className="typing-indicator">
+
+                  <span />
+                  <span />
+                  <span />
+
+                </div>
+
+                <span>
+                  {generationMessage ||
+                    "AI is writing code..."}
+                </span>
+
+                <strong>
+                  {generationTime}s
+                </strong>
+
+              </div>
+            )}
 
             <div className="editor-body">
 
@@ -1536,19 +1858,17 @@ ${jsCode || ""}
                 {Array.from(
                   {
                     length:
-                      activeTab ===
-                      "html"
-                        ? htmlCode.split(
-                            "\n"
-                          ).length
-                        : activeTab ===
-                          "css"
-                        ? cssCode.split(
-                            "\n"
-                          ).length
-                        : jsCode.split(
-                            "\n"
-                          ).length,
+                      (
+                        activeTab ===
+                        "html"
+                          ? htmlCode
+                          : activeTab ===
+                            "css"
+                          ? cssCode
+                          : jsCode
+                      ).split(
+                        "\n"
+                      ).length,
                   },
                   (_, index) => (
                     <span
@@ -1565,20 +1885,15 @@ ${jsCode || ""}
                 "html" && (
                 <textarea
                   className="premium-code-editor"
-                  value={htmlCode}
-                  onChange={(e) => {
-
-                    const value =
-                      e.target.value;
-
-                    setHtmlCode(
-                      value
-                    );
-
-                    setSaved(
-                      false
-                    );
-                  }}
+                  value={
+                    htmlCode
+                  }
+                  onChange={(event) =>
+                    updateHtml(
+                      event.target
+                        .value
+                    )
+                  }
                   spellCheck="false"
                 />
               )}
@@ -1587,20 +1902,15 @@ ${jsCode || ""}
                 "css" && (
                 <textarea
                   className="premium-code-editor"
-                  value={cssCode}
-                  onChange={(e) => {
-
-                    const value =
-                      e.target.value;
-
-                    setCssCode(
-                      value
-                    );
-
-                    setSaved(
-                      false
-                    );
-                  }}
+                  value={
+                    cssCode
+                  }
+                  onChange={(event) =>
+                    updateCss(
+                      event.target
+                        .value
+                    )
+                  }
                   spellCheck="false"
                 />
               )}
@@ -1609,20 +1919,15 @@ ${jsCode || ""}
                 "js" && (
                 <textarea
                   className="premium-code-editor"
-                  value={jsCode}
-                  onChange={(e) => {
-
-                    const value =
-                      e.target.value;
-
-                    setJsCode(
-                      value
-                    );
-
-                    setSaved(
-                      false
-                    );
-                  }}
+                  value={
+                    jsCode
+                  }
+                  onChange={(event) =>
+                    updateJs(
+                      event.target
+                        .value
+                    )
+                  }
                   spellCheck="false"
                 />
               )}
@@ -1637,7 +1942,7 @@ ${jsCode || ""}
 
               <span>
                 {activeTab ===
-                "html"
+                  "html"
                   ? "HTML"
                   : activeTab ===
                     "css"
@@ -1646,8 +1951,13 @@ ${jsCode || ""}
               </span>
 
               <span>
+                {currentCodeLength.toLocaleString()}
+                {" "}characters
+              </span>
+
+              <span>
                 {generating
-                  ? "AI Streaming"
+                  ? "● Live"
                   : "Auto Preview"}
               </span>
 
@@ -1656,9 +1966,9 @@ ${jsCode || ""}
           </section>
         )}
 
-        {/* =================================================
+        {/* ==================================================
             PREVIEW
-        ================================================= */}
+        ================================================== */}
 
         {activeMode ===
           "preview" && (
@@ -1670,13 +1980,9 @@ ${jsCode || ""}
 
                 <span className="live-dot" />
 
-                Live Preview
-
-                {generating && (
-                  <span className="preview-generating">
-                    Updating...
-                  </span>
-                )}
+                {generating
+                  ? "Live AI Preview"
+                  : "Live Preview"}
 
               </div>
 
@@ -1771,7 +2077,9 @@ ${jsCode || ""}
               >
 
                 <iframe
-                  key={previewKey}
+                  key={
+                    previewKey
+                  }
                   title="Generated Website Preview"
                   srcDoc={
                     previewDocument
@@ -1779,24 +2087,24 @@ ${jsCode || ""}
                   sandbox="allow-scripts"
                 />
 
-                {generating &&
-                  !htmlCode && (
-                    <div className="preview-loading">
-                      <div>
-                        <div className="preview-loader">
-                          ✦
-                        </div>
+                {generating && (
+                  <div className="preview-generating">
 
-                        <strong>
-                          AI is building...
-                        </strong>
-
-                        <span>
-                          {aiMessage}
-                        </span>
-                      </div>
+                    <div className="preview-ai-orb">
+                      ✦
                     </div>
-                  )}
+
+                    <strong>
+                      AI is building...
+                    </strong>
+
+                    <span>
+                      {generationMessage ||
+                        "Writing your website"}
+                    </span>
+
+                  </div>
+                )}
 
               </div>
 
@@ -1805,24 +2113,21 @@ ${jsCode || ""}
             <div className="preview-footer">
 
               <span>
-                ● Live
+                ●{" "}
+                {generating
+                  ? "Generating"
+                  : "Live"}
               </span>
 
               <span>
                 {device ===
-                "desktop"
+                  "desktop"
                   ? "Desktop"
                   : device ===
                     "tablet"
                   ? "Tablet"
                   : "Mobile"}
               </span>
-
-              {generating && (
-                <span>
-                  AI streaming
-                </span>
-              )}
 
             </div>
 
@@ -1831,28 +2136,31 @@ ${jsCode || ""}
 
       </main>
 
-      {/* =================================================
+      {/* ====================================================
           SETTINGS
-      ================================================= */}
+      ==================================================== */}
 
       {showSettings && (
         <div
           className="settings-overlay"
           onClick={() =>
-            setShowSettings(false)
+            setShowSettings(
+              false
+            )
           }
         >
 
           <div
             className="settings-panel"
-            onClick={(e) =>
-              e.stopPropagation()
+            onClick={(event) =>
+              event.stopPropagation()
             }
           >
 
             <div className="settings-header">
 
               <div>
+
                 <span>
                   PROJECT
                 </span>
@@ -1860,6 +2168,7 @@ ${jsCode || ""}
                 <h2>
                   Settings
                 </h2>
+
               </div>
 
               <button
@@ -1875,7 +2184,9 @@ ${jsCode || ""}
             </div>
 
             <div className="setting-row">
+
               <div>
+
                 <strong>
                   Project Name
                 </strong>
@@ -1883,11 +2194,15 @@ ${jsCode || ""}
                 <p>
                   {project.name}
                 </p>
+
               </div>
+
             </div>
 
             <div className="setting-row">
+
               <div>
+
                 <strong>
                   Project Type
                 </strong>
@@ -1896,11 +2211,15 @@ ${jsCode || ""}
                   {project.type ||
                     "Website"}
                 </p>
+
               </div>
+
             </div>
 
             <div className="setting-row">
+
               <div>
+
                 <strong>
                   Project ID
                 </strong>
@@ -1908,20 +2227,9 @@ ${jsCode || ""}
                 <p>
                   {projectId}
                 </p>
-              </div>
-            </div>
 
-            <div className="setting-row">
-              <div>
-                <strong>
-                  AI Model
-                </strong>
-
-                <p>
-                  {generationModel ||
-                    "Automatic model selection"}
-                </p>
               </div>
+
             </div>
 
           </div>
