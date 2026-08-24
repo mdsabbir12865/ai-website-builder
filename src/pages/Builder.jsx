@@ -1,128 +1,260 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import JSZip from "jszip";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
 import { supabase } from "../lib/supabase";
 
+import JSZip from "jszip";
+
 function Builder() {
-  const { projectId } = useParams();
-  const navigate = useNavigate();
+  const { projectId } =
+    useParams();
 
-  const [project, setProject] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const [prompt, setPrompt] = useState("");
-  const [htmlCode, setHtmlCode] = useState("");
-  const [cssCode, setCssCode] = useState("");
-  const [jsCode, setJsCode] = useState("");
-
-  const [activeTab, setActiveTab] = useState("html");
-  const [activeMode, setActiveMode] = useState("code");
-  const [device, setDevice] = useState("desktop");
-
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(true);
-
-  const [showSettings, setShowSettings] = useState(false);
-  const [showExport, setShowExport] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
-
-  const [history, setHistory] = useState([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-
-  const [previewKey, setPreviewKey] = useState(0);
-
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [aiStage, setAiStage] = useState("");
-  const [aiMessage, setAiMessage] = useState("");
-  const [generationError, setGenerationError] = useState("");
-
-  const abortRef = useRef(null);
-  const generationIdRef = useRef(0);
+  const navigate =
+    useNavigate();
 
   /*
-  ==========================================================
+  ========================================================
+  PROJECT
+  ========================================================
+  */
+
+  const [project, setProject] =
+    useState(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  /*
+  ========================================================
+  CODE
+  ========================================================
+  */
+
+  const [prompt, setPrompt] =
+    useState("");
+
+  const [htmlCode, setHtmlCode] =
+    useState("");
+
+  const [cssCode, setCssCode] =
+    useState("");
+
+  const [jsCode, setJsCode] =
+    useState("");
+
+  /*
+  ========================================================
+  UI
+  ========================================================
+  */
+
+  const [activeTab, setActiveTab] =
+    useState("html");
+
+  const [activeMode, setActiveMode] =
+    useState("code");
+
+  const [device, setDevice] =
+    useState("desktop");
+
+  const [fullscreen, setFullscreen] =
+    useState(false);
+
+  const [previewKey, setPreviewKey] =
+    useState(0);
+
+  /*
+  ========================================================
+  AI STATE
+  ========================================================
+  */
+
+  const [generating, setGenerating] =
+    useState(false);
+
+  const [generationStage, setGenerationStage] =
+    useState("");
+
+  const [generationMessage, setGenerationMessage] =
+    useState("");
+
+  const [generationModel, setGenerationModel] =
+    useState("");
+
+  const [generationProgress, setGenerationProgress] =
+    useState(0);
+
+  const [generationError, setGenerationError] =
+    useState("");
+
+  const abortController =
+    useRef(null);
+
+  /*
+  ========================================================
+  SAVE
+  ========================================================
+  */
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [saved, setSaved] =
+    useState(true);
+
+  /*
+  ========================================================
+  HISTORY
+  ========================================================
+  */
+
+  const [history, setHistory] =
+    useState([]);
+
+  const [historyIndex, setHistoryIndex] =
+    useState(-1);
+
+  /*
+  ========================================================
+  OTHER UI
+  ========================================================
+  */
+
+  const [showSettings, setShowSettings] =
+    useState(false);
+
+  const [showExport, setShowExport] =
+    useState(false);
+
+  /*
+  ========================================================
   LOAD PROJECT
-  ==========================================================
+  ========================================================
   */
 
   useEffect(() => {
     let mounted = true;
 
     async function loadProject() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const {
+          data: { user },
+        } =
+          await supabase.auth.getUser();
 
-      if (!mounted) return;
+        if (!user) {
+          navigate(
+            "/login",
+            {
+              replace: true,
+            }
+          );
 
-      if (!user) {
-        navigate("/login", {
-          replace: true,
-        });
-        return;
-      }
+          return;
+        }
 
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", projectId)
-        .eq("user_id", user.id)
-        .single();
+        const {
+          data,
+          error,
+        } =
+          await supabase
+            .from("projects")
+            .select("*")
+            .eq(
+              "id",
+              projectId
+            )
+            .eq(
+              "user_id",
+              user.id
+            )
+            .single();
 
-      if (!mounted) return;
+        if (error) {
+          console.error(
+            "Project loading error:",
+            error
+          );
 
-      if (error) {
+          if (mounted) {
+            setLoading(false);
+          }
+
+          return;
+        }
+
+        if (!mounted) return;
+
+        setProject(data);
+
+        setPrompt(
+          data.prompt || ""
+        );
+
+        setHtmlCode(
+          data.html_code || ""
+        );
+
+        setCssCode(
+          data.css_code || ""
+        );
+
+        setJsCode(
+          data.js_code || ""
+        );
+
+        const initialState = {
+          html:
+            data.html_code || "",
+
+          css:
+            data.css_code || "",
+
+          js:
+            data.js_code || "",
+        };
+
+        setHistory([
+          initialState,
+        ]);
+
+        setHistoryIndex(0);
+
+        setLoading(false);
+      } catch (error) {
         console.error(
-          "Project loading error:",
           error
         );
 
-        setLoading(false);
-        return;
+        if (mounted) {
+          setLoading(false);
+        }
       }
-
-      setProject(data);
-      setPrompt(data.prompt || "");
-
-      setHtmlCode(
-        data.html_code || ""
-      );
-
-      setCssCode(
-        data.css_code || ""
-      );
-
-      setJsCode(
-        data.js_code || ""
-      );
-
-      setHistory([
-        {
-          html: data.html_code || "",
-          css: data.css_code || "",
-          js: data.js_code || "",
-        },
-      ]);
-
-      setHistoryIndex(0);
-      setLoading(false);
     }
 
     loadProject();
 
     return () => {
       mounted = false;
-
-      if (abortRef.current) {
-        abortRef.current.abort();
-      }
     };
-  }, [projectId, navigate]);
+  }, [
+    projectId,
+    navigate,
+  ]);
 
   /*
-  ==========================================================
+  ========================================================
   CURRENT CODE
-  ==========================================================
+  ========================================================
   */
 
   const currentCode = useMemo(
@@ -131,75 +263,99 @@ function Builder() {
       css: cssCode,
       js: jsCode,
     }),
-    [htmlCode, cssCode, jsCode]
+    [
+      htmlCode,
+      cssCode,
+      jsCode,
+    ]
   );
 
   /*
-  ==========================================================
+  ========================================================
   HISTORY
-  ==========================================================
+  ========================================================
   */
 
-  function pushHistory(nextState) {
-    setHistory((prev) => {
-      const base =
-        historyIndex >= 0
-          ? prev.slice(
-              0,
-              historyIndex + 1
-            )
-          : [];
+  function pushHistory(
+    nextState
+  ) {
+    setHistory(
+      (previous) => {
+        const trimmed =
+          previous.slice(
+            0,
+            historyIndex + 1
+          );
 
-      const last =
-        base[base.length - 1];
-
-      if (
-        last &&
-        last.html === nextState.html &&
-        last.css === nextState.css &&
-        last.js === nextState.js
-      ) {
-        return base;
+        return [
+          ...trimmed,
+          nextState,
+        ].slice(-30);
       }
+    );
 
-      const next = [
-        ...base,
-        nextState,
-      ].slice(-30);
-
-      setHistoryIndex(
-        next.length - 1
-      );
-
-      return next;
-    });
+    setHistoryIndex(
+      (previous) =>
+        Math.min(
+          previous + 1,
+          29
+        )
+    );
   }
 
   function markChanged() {
     setSaved(false);
   }
 
+  /*
+  ========================================================
+  UNDO
+  ========================================================
+  */
+
   function handleUndo() {
-    if (historyIndex <= 0) return;
+    if (
+      historyIndex <= 0
+    ) {
+      return;
+    }
 
     const previous =
-      history[historyIndex - 1];
+      history[
+        historyIndex - 1
+      ];
 
     if (!previous) return;
 
-    setHtmlCode(previous.html);
-    setCssCode(previous.css);
-    setJsCode(previous.js);
+    setHtmlCode(
+      previous.html
+    );
+
+    setCssCode(
+      previous.css
+    );
+
+    setJsCode(
+      previous.js
+    );
 
     setHistoryIndex(
       historyIndex - 1
     );
 
     setSaved(false);
+
     setPreviewKey(
-      (value) => value + 1
+      (value) =>
+        value + 1
     );
   }
+
+  /*
+  ========================================================
+  REDO
+  ========================================================
+  */
 
   function handleRedo() {
     if (
@@ -210,129 +366,146 @@ function Builder() {
     }
 
     const next =
-      history[historyIndex + 1];
+      history[
+        historyIndex + 1
+      ];
 
     if (!next) return;
 
-    setHtmlCode(next.html);
-    setCssCode(next.css);
-    setJsCode(next.js);
+    setHtmlCode(
+      next.html
+    );
+
+    setCssCode(
+      next.css
+    );
+
+    setJsCode(
+      next.js
+    );
 
     setHistoryIndex(
       historyIndex + 1
     );
 
     setSaved(false);
+
     setPreviewKey(
-      (value) => value + 1
+      (value) =>
+        value + 1
     );
   }
 
   /*
-  ==========================================================
-  SSE PARSER
-  ==========================================================
+  ========================================================
+  SAVE
+  ========================================================
   */
 
-  async function readSSEStream(
-    response,
+  async function handleSave() {
+    if (saving) return;
+
+    setSaving(true);
+
+    try {
+      const {
+        data: { user },
+      } =
+        await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error(
+          "You are not logged in."
+        );
+      }
+
+      const {
+        error,
+      } =
+        await supabase
+          .from("projects")
+          .update({
+            prompt,
+
+            html_code:
+              htmlCode,
+
+            css_code:
+              cssCode,
+
+            js_code:
+              jsCode,
+
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq(
+            "id",
+            projectId
+          )
+          .eq(
+            "user_id",
+            user.id
+          );
+
+      if (error) {
+        throw error;
+      }
+
+      setSaved(true);
+    } catch (error) {
+      console.error(
+        "Save error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Save failed."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /*
+  ========================================================
+  STREAM PARSER
+  ========================================================
+  */
+
+  function parseSSEChunk(
+    buffer,
     onEvent
   ) {
-    if (!response.body) {
-      throw new Error(
-        "Streaming is not supported by this browser."
+    const events =
+      buffer.split(
+        "\n\n"
       );
-    }
-
-    const reader =
-      response.body.getReader();
-
-    const decoder =
-      new TextDecoder("utf-8");
-
-    let buffer = "";
-
-    while (true) {
-      const { value, done } =
-        await reader.read();
-
-      if (done) break;
-
-      buffer += decoder.decode(
-        value,
-        { stream: true }
-      );
-
-      const events =
-        buffer.split("\n\n");
-
-      buffer =
-        events.pop() || "";
-
-      for (const rawEvent of events) {
-        if (!rawEvent.trim()) continue;
-
-        let eventName = "message";
-        let dataText = "";
-
-        const lines =
-          rawEvent.split(/\r?\n/);
-
-        for (const line of lines) {
-          if (
-            line.startsWith(
-              "event:"
-            )
-          ) {
-            eventName =
-              line
-                .slice(6)
-                .trim();
-          }
-
-          if (
-            line.startsWith(
-              "data:"
-            )
-          ) {
-            dataText +=
-              line
-                .slice(5)
-                .trim();
-          }
-        }
-
-        if (!dataText) continue;
-
-        try {
-          const data =
-            JSON.parse(dataText);
-
-          await onEvent(
-            eventName,
-            data
-          );
-        } catch (error) {
-          console.warn(
-            "Invalid SSE event:",
-            error
-          );
-        }
-      }
-    }
 
     const remaining =
-      buffer.trim();
+      events.pop() || "";
 
-    if (remaining) {
-      let eventName = "message";
-      let dataText = "";
+    for (
+      const eventBlock of events
+    ) {
+      const lines =
+        eventBlock.split(
+          "\n"
+        );
 
-      for (const line of remaining.split(
-        /\r?\n/
-      )) {
+      let eventName =
+        "message";
+
+      let data = "";
+
+      for (
+        const line of lines
+      ) {
         if (
-          line.startsWith("event:")
+          line.startsWith(
+            "event:"
+          )
         ) {
           eventName =
             line
@@ -341,82 +514,90 @@ function Builder() {
         }
 
         if (
-          line.startsWith("data:")
+          line.startsWith(
+            "data:"
+          )
         ) {
-          dataText +=
+          data +=
             line
               .slice(5)
               .trim();
         }
       }
 
-      if (dataText) {
-        try {
-          await onEvent(
-            eventName,
-            JSON.parse(dataText)
-          );
-        } catch {
-          // Ignore incomplete final event.
-        }
+      if (!data) continue;
+
+      try {
+        const parsed =
+          JSON.parse(data);
+
+        onEvent(
+          eventName,
+          parsed
+        );
+      } catch {
+        console.warn(
+          "Invalid SSE event:",
+          data
+        );
       }
     }
+
+    return remaining;
   }
 
   /*
-  ==========================================================
-  GENERATE WEBSITE — REAL TIME STREAM
-  ==========================================================
+  ========================================================
+  GENERATE
+  ========================================================
   */
 
   async function handleGenerate() {
-    if (isGenerating) return;
-
-    const cleanPrompt =
-      prompt.trim();
-
-    if (!cleanPrompt) {
-      alert(
-        "Please describe what you want to build."
-      );
+    if (
+      generating
+    ) {
       return;
     }
 
-    /*
-    Cancel previous request.
-    */
+    if (
+      !prompt.trim()
+    ) {
+      alert(
+        "Please describe what you want to build."
+      );
 
-    if (abortRef.current) {
-      abortRef.current.abort();
+      return;
     }
 
-    const controller =
-      new AbortController();
+    setGenerating(true);
 
-    abortRef.current =
-      controller;
-
-    const generationId =
-      ++generationIdRef.current;
-
-    setIsGenerating(true);
     setGenerationError("");
-    setAiStage("starting");
-    setAiMessage(
-      "Starting AI..."
+
+    setGenerationStage(
+      "thinking"
+    );
+
+    setGenerationMessage(
+      "Understanding your idea..."
+    );
+
+    setGenerationProgress(3);
+
+    setActiveMode(
+      "code"
     );
 
     /*
-    Clear editor immediately so user sees
-    the new generation coming in.
+    Clear current code so
+    streaming appears naturally.
     */
 
     setHtmlCode("");
     setCssCode("");
     setJsCode("");
 
-    setActiveMode("code");
-    setActiveTab("html");
+    abortController.current =
+      new AbortController();
 
     try {
       const response =
@@ -428,21 +609,21 @@ function Builder() {
             headers: {
               "Content-Type":
                 "application/json",
+
               Accept:
                 "text/event-stream",
             },
 
-            cache: "no-store",
-
-            signal:
-              controller.signal,
-
             body: JSON.stringify({
-              prompt:
-                cleanPrompt,
+              prompt,
 
               currentCode,
             }),
+
+            signal:
+              abortController
+                .current
+                .signal,
           }
         );
 
@@ -457,367 +638,469 @@ function Builder() {
           message =
             errorData.error ||
             message;
-        } catch {
-          // Ignore invalid JSON.
-        }
+        } catch {}
 
         throw new Error(
           message
         );
       }
 
-      let streamedHtml = "";
-      let streamedCss = "";
-      let streamedJs = "";
+      if (
+        !response.body
+      ) {
+        throw new Error(
+          "Streaming is not supported by this response."
+        );
+      }
 
-      await readSSEStream(
-        response,
-        async (
-          eventName,
-          data
-        ) => {
-          /*
-          Ignore events from an old request.
-          */
+      const reader =
+        response.body.getReader();
 
-          if (
-            generationId !==
-            generationIdRef.current
-          ) {
-            return;
-          }
+      const decoder =
+        new TextDecoder(
+          "utf-8"
+        );
 
-          /*
-          STATUS
-          */
+      let buffer = "";
 
-          if (
-            eventName ===
-            "status"
-          ) {
-            setAiStage(
-              data.stage ||
-                "working"
-            );
+      let streamedHTML = "";
+      let streamedCSS = "";
+      let streamedJS = "";
 
-            setAiMessage(
-              data.message ||
-                "AI is working..."
-            );
+      let receivedComplete =
+        false;
 
-            return;
-          }
+      while (
+        true
+      ) {
+        const {
+          value,
+          done,
+        } =
+          await reader.read();
 
-          /*
-          CODE STREAM
-          */
+        if (done) break;
 
-          if (
-            eventName ===
-            "code"
-          ) {
-            const type =
-              data.type;
+        buffer +=
+          decoder.decode(
+            value,
+            {
+              stream: true,
+            }
+          );
 
-            const value =
-              typeof data.value ===
-              "string"
-                ? data.value
-                : "";
-
-            if (
-              type === "html"
-            ) {
-              streamedHtml =
-                value;
-
-              setHtmlCode(
-                value
-              );
-
+        buffer =
+          parseSSEChunk(
+            buffer,
+            (
+              event,
+              data
+            ) => {
               /*
-              Stay on HTML while
-              HTML is being written.
+              ----------------------------------
+              STATUS
+              ----------------------------------
               */
 
-              setActiveTab(
-                "html"
-              );
-            }
-
-            if (
-              type === "css"
-            ) {
-              streamedCss =
-                value;
-
-              setCssCode(
-                value
-              );
-
-              /*
-              Automatically move to CSS
-              when CSS generation begins.
-              */
-
-              setActiveTab(
-                "css"
-              );
-            }
-
-            if (
-              type === "js"
-            ) {
-              streamedJs =
-                value;
-
-              setJsCode(
-                value
-              );
-
-              setActiveTab(
-                "js"
-              );
-            }
-
-            /*
-            Keep editor mode visible.
-            */
-
-            setActiveMode(
-              "code"
-            );
-
-            return;
-          }
-
-          /*
-          COMPLETE
-          */
-
-          if (
-            eventName ===
-            "complete"
-          ) {
-            const finalHtml =
-              data.html ??
-              streamedHtml ??
-              "";
-
-            const finalCss =
-              data.css ??
-              streamedCss ??
-              "";
-
-            const finalJs =
-              data.js ??
-              streamedJs ??
-              "";
-
-            setHtmlCode(
-              finalHtml
-            );
-
-            setCssCode(
-              finalCss
-            );
-
-            setJsCode(
-              finalJs
-            );
-
-            pushHistory({
-              html: finalHtml,
-              css: finalCss,
-              js: finalJs,
-            });
-
-            setSaved(false);
-
-            setPreviewKey(
-              (value) =>
-                value + 1
-            );
-
-            setAiStage(
-              "complete"
-            );
-
-            setAiMessage(
-              "Website generated successfully."
-            );
-
-            /*
-            Automatically show preview
-            after the full stream finishes.
-            */
-
-            setTimeout(() => {
               if (
-                generationId ===
-                generationIdRef.current
+                event ===
+                "status"
               ) {
+                setGenerationStage(
+                  data.stage ||
+                    ""
+                );
+
+                setGenerationMessage(
+                  data.message ||
+                    "Generating..."
+                );
+
+                if (
+                  data.model
+                ) {
+                  setGenerationModel(
+                    data.model
+                  );
+                }
+
+                const progressMap = {
+                  thinking: 5,
+                  connecting: 10,
+                  generating: 15,
+                  html: 35,
+                  css: 65,
+                  js: 85,
+                  retrying: 10,
+                };
+
+                const progress =
+                  progressMap[
+                    data.stage
+                  ];
+
+                if (
+                  progress
+                ) {
+                  setGenerationProgress(
+                    progress
+                  );
+                }
+              }
+
+              /*
+              ----------------------------------
+              CODE
+              ----------------------------------
+              */
+
+              if (
+                event ===
+                "code"
+              ) {
+                if (
+                  data.type ===
+                  "html"
+                ) {
+                  streamedHTML =
+                    data.value ||
+                    streamedHTML;
+
+                  setHtmlCode(
+                    streamedHTML
+                  );
+
+                  setGenerationProgress(
+                    Math.min(
+                      60,
+                      15 +
+                        Math.floor(
+                          streamedHTML.length /
+                            150
+                        )
+                    )
+                  );
+                }
+
+                if (
+                  data.type ===
+                  "css"
+                ) {
+                  streamedCSS =
+                    data.value ||
+                    streamedCSS;
+
+                  setCssCode(
+                    streamedCSS
+                  );
+
+                  setGenerationProgress(
+                    Math.min(
+                      85,
+                      55 +
+                        Math.floor(
+                          streamedCSS.length /
+                            200
+                        )
+                    )
+                  );
+                }
+
+                if (
+                  data.type ===
+                  "js"
+                ) {
+                  streamedJS =
+                    data.value ||
+                    streamedJS;
+
+                  setJsCode(
+                    streamedJS
+                  );
+
+                  setGenerationProgress(
+                    Math.min(
+                      98,
+                      80 +
+                        Math.floor(
+                          streamedJS.length /
+                            300
+                        )
+                    )
+                  );
+                }
+
+                setSaved(
+                  false
+                );
+              }
+
+              /*
+              ----------------------------------
+              COMPLETE
+              ----------------------------------
+              */
+
+              if (
+                event ===
+                "complete"
+              ) {
+                receivedComplete =
+                  true;
+
+                setHtmlCode(
+                  data.html ||
+                    streamedHTML
+                );
+
+                setCssCode(
+                  data.css ||
+                    streamedCSS
+                );
+
+                setJsCode(
+                  data.js ||
+                    streamedJS
+                );
+
+                setGenerationProgress(
+                  100
+                );
+
+                setGenerationStage(
+                  "complete"
+                );
+
+                setGenerationMessage(
+                  "Website generated successfully."
+                );
+
+                if (
+                  data.model
+                ) {
+                  setGenerationModel(
+                    data.model
+                  );
+                }
+
+                const finalState =
+                  {
+                    html:
+                      data.html ||
+                      streamedHTML,
+
+                    css:
+                      data.css ||
+                      streamedCSS,
+
+                    js:
+                      data.js ||
+                      streamedJS,
+                  };
+
+                setHistory(
+                  (previous) => [
+                    ...previous,
+                    finalState,
+                  ].slice(-30)
+                );
+
+                setHistoryIndex(
+                  (previous) =>
+                    previous + 1
+                );
+
+                setSaved(
+                  false
+                );
+
+                setPreviewKey(
+                  (value) =>
+                    value + 1
+                );
+
                 setActiveMode(
                   "preview"
                 );
               }
-            }, 250);
 
-            return;
-          }
+              /*
+              ----------------------------------
+              ERROR
+              ----------------------------------
+              */
 
-          /*
-          ERROR
-          */
-
-          if (
-            eventName ===
-            "error"
-          ) {
-            throw new Error(
-              data.message ||
-                "AI generation failed."
-            );
-          }
-        }
-      );
-
-      /*
-      If stream ended without complete,
-      keep whatever was streamed.
-      */
+              if (
+                event ===
+                "error"
+              ) {
+                setGenerationError(
+                  data.message ||
+                    "AI generation failed."
+                );
+              }
+            }
+          );
+      }
 
       if (
-        streamedHtml ||
-        streamedCss ||
-        streamedJs
+        !receivedComplete &&
+        !generationError
       ) {
-        setHtmlCode(
-          streamedHtml
-        );
+        /*
+        Sometimes the connection can
+        close immediately after the
+        final event.
+        */
 
-        setCssCode(
-          streamedCss
-        );
+        if (
+          streamedHTML ||
+          streamedCSS ||
+          streamedJS
+        ) {
+          setGenerationStage(
+            "complete"
+          );
 
-        setJsCode(
-          streamedJs
-        );
+          setGenerationProgress(
+            100
+          );
 
-        setSaved(false);
+          setGenerationMessage(
+            "Generation finished."
+          );
+
+          setActiveMode(
+            "preview"
+          );
+        }
       }
     } catch (error) {
       if (
         error?.name ===
         "AbortError"
       ) {
-        return;
+        setGenerationMessage(
+          "Generation cancelled."
+        );
+      } else {
+        console.error(
+          "AI Generate Error:",
+          error
+        );
+
+        setGenerationError(
+          error?.message ||
+            "Something went wrong while generating."
+        );
       }
-
-      console.error(
-        "AI Generate Error:",
-        error
-      );
-
-      setGenerationError(
-        error?.message ||
-          "AI generation failed."
-      );
-
-      setAiStage(
-        "error"
-      );
-
-      setAiMessage(
-        error?.message ||
-          "AI generation failed."
-      );
     } finally {
-      if (
-        generationId ===
-        generationIdRef.current
-      ) {
-        setIsGenerating(false);
-      }
+      setGenerating(
+        false
+      );
+
+      abortController.current =
+        null;
     }
   }
 
   /*
-  ==========================================================
-  STOP GENERATION
-  ==========================================================
+  ========================================================
+  CANCEL GENERATION
+  ========================================================
   */
 
-  function handleStopGeneration() {
-    if (abortRef.current) {
-      abortRef.current.abort();
-      abortRef.current = null;
+  function handleCancelGeneration() {
+    if (
+      abortController.current
+    ) {
+      abortController.current.abort();
     }
 
-    setIsGenerating(false);
-    setAiStage("stopped");
-    setAiMessage(
-      "Generation stopped."
+    setGenerating(
+      false
+    );
+
+    setGenerationStage(
+      "cancelled"
+    );
+
+    setGenerationMessage(
+      "Generation cancelled."
     );
   }
 
   /*
-  ==========================================================
-  SAVE
-  ==========================================================
+  ========================================================
+  PREVIEW
+  ========================================================
   */
 
-  async function handleSave() {
-    if (saving) return;
+  const previewDocument =
+    useMemo(
+      () => `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+/>
 
-    setSaving(true);
+<style>
 
-    const {
-      error,
-    } = await supabase
-      .from("projects")
-      .update({
-        prompt,
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  overflow-x: hidden;
+}
 
-        html_code:
-          htmlCode,
+* {
+  box-sizing: border-box;
+}
 
-        css_code:
-          cssCode,
+${cssCode}
 
-        js_code:
-          jsCode,
+</style>
+</head>
 
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        "id",
-        projectId
-      );
+<body>
 
-    setSaving(false);
+${htmlCode}
 
-    if (error) {
-      console.error(
-        "Save error:",
-        error
-      );
+<script>
 
-      alert(
-        "Save failed."
-      );
+try {
 
-      return;
-    }
+${jsCode}
 
-    setSaved(true);
-  }
+} catch (error) {
+
+console.error(
+  "Generated website error:",
+  error
+);
+
+}
+
+<\/script>
+
+</body>
+</html>
+`,
+      [
+        htmlCode,
+        cssCode,
+        jsCode,
+      ]
+    );
 
   /*
-  ==========================================================
-  ZIP EXPORT
-  ==========================================================
+  ========================================================
+  DOWNLOAD ZIP
+  ========================================================
   */
 
   async function handleDownloadZip() {
@@ -827,19 +1110,21 @@ function Builder() {
       const zip =
         new JSZip();
 
-      const html = `<!DOCTYPE html>
+      const html =
+        `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${project.name || "My Website"}</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${project.name || "My Website"}</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 ${htmlCode}
 
 <script src="script.js"></script>
+
 </body>
 </html>`;
 
@@ -850,18 +1135,20 @@ ${htmlCode}
 
       zip.file(
         "style.css",
-        cssCode || ""
+        cssCode
       );
 
       zip.file(
         "script.js",
-        jsCode || ""
+        jsCode
       );
 
       const blob =
-        await zip.generateAsync({
-          type: "blob",
-        });
+        await zip.generateAsync(
+          {
+            type: "blob",
+          }
+        );
 
       const url =
         URL.createObjectURL(
@@ -889,12 +1176,15 @@ ${htmlCode}
 
       link.remove();
 
-      URL.revokeObjectURL(
-        url
+      setTimeout(
+        () =>
+          URL.revokeObjectURL(
+            url
+          ),
+        1000
       );
     } catch (error) {
       console.error(
-        "ZIP export error:",
         error
       );
 
@@ -905,33 +1195,34 @@ ${htmlCode}
   }
 
   /*
-  ==========================================================
+  ========================================================
   EXPORT CODE
-  ==========================================================
+  ========================================================
   */
 
   function handleExportCode() {
     if (!project) return;
 
-    const html = `<!DOCTYPE html>
+    const content =
+      `===== index.html =====
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${project.name || "My Website"}</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${project.name || "My Website"}</title>
+<link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
 ${htmlCode}
 
 <script src="script.js"></script>
+
 </body>
-</html>`;
-
-    const code = `===== index.html =====
-
-${html}
+</html>
 
 
 ===== style.css =====
@@ -946,7 +1237,7 @@ ${jsCode}
 
     const blob =
       new Blob(
-        [code],
+        [content],
         {
           type:
             "text/plain;charset=utf-8",
@@ -979,60 +1270,19 @@ ${jsCode}
 
     link.remove();
 
-    URL.revokeObjectURL(
-      url
+    setTimeout(
+      () =>
+        URL.revokeObjectURL(
+          url
+        ),
+      1000
     );
   }
 
   /*
-  ==========================================================
-  PREVIEW DOCUMENT
-  ==========================================================
-  */
-
-  const previewDocument = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<style>
-
-html,
-body {
-  margin: 0;
-  min-height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-${cssCode || ""}
-
-</style>
-</head>
-
-<body>
-
-${htmlCode || ""}
-
-<script>
-try {
-${jsCode || ""}
-} catch (error) {
-  console.error("Preview JavaScript error:", error);
-}
-<\/script>
-
-</body>
-</html>
-`;
-
-  /*
-  ==========================================================
+  ========================================================
   LOADING
-  ==========================================================
+  ========================================================
   */
 
   if (loading) {
@@ -1054,9 +1304,9 @@ ${jsCode || ""}
   }
 
   /*
-  ==========================================================
+  ========================================================
   PROJECT ERROR
-  ==========================================================
+  ========================================================
   */
 
   if (!project) {
@@ -1071,8 +1321,8 @@ ${jsCode || ""}
         </h2>
 
         <p>
-          This project may have been
-          deleted or moved.
+          This project may have
+          been deleted or moved.
         </p>
 
         <button
@@ -1089,24 +1339,10 @@ ${jsCode || ""}
   }
 
   /*
-  ==========================================================
+  ========================================================
   RENDER
-  ==========================================================
+  ========================================================
   */
-
-  const editorValue =
-    activeTab === "html"
-      ? htmlCode
-      : activeTab === "css"
-      ? cssCode
-      : jsCode;
-
-  const lineCount =
-    Math.max(
-      1,
-      editorValue.split("\n")
-        .length
-    );
 
   return (
     <div
@@ -1116,6 +1352,7 @@ ${jsCode || ""}
           : ""
       }`}
     >
+
       {/* TOP BAR */}
 
       <header className="builder-topbar">
@@ -1250,7 +1487,8 @@ ${jsCode || ""}
             className="secondary-action"
             onClick={() =>
               setShowExport(
-                !showExport
+                (value) =>
+                  !value
               )
             }
           >
@@ -1263,7 +1501,8 @@ ${jsCode || ""}
               handleSave
             }
             disabled={
-              saving
+              saving ||
+              generating
             }
           >
             {saving
@@ -1275,7 +1514,7 @@ ${jsCode || ""}
 
       </header>
 
-      {/* EXPORT */}
+      {/* EXPORT MENU */}
 
       {showExport && (
         <div className="export-menu">
@@ -1301,7 +1540,7 @@ ${jsCode || ""}
           </button>
 
           <button>
-            ◇ GitHub
+            ◆ GitHub
             <small>
               Coming soon
             </small>
@@ -1321,7 +1560,7 @@ ${jsCode || ""}
 
       <main className="builder-workspace">
 
-        {/* LEFT AI */}
+        {/* AI SIDEBAR */}
 
         <aside className="builder-left">
 
@@ -1345,34 +1584,37 @@ ${jsCode || ""}
 
           <div
             className={`ai-status ${
-              isGenerating
+              generating
                 ? "generating"
                 : ""
             }`}
           >
+
             <span className="status-dot" />
 
-            {isGenerating
+            {generating
               ? "AI Generating..."
               : "AI Ready"}
+
           </div>
 
           <textarea
             className="ai-prompt"
             value={prompt}
-            disabled={
-              isGenerating
-            }
             onChange={(event) => {
               setPrompt(
                 event.target.value
               );
+
               markChanged();
             }}
             placeholder="Describe what you want to build..."
+            disabled={
+              generating
+            }
           />
 
-          {!isGenerating ? (
+          {!generating ? (
             <button
               className="generate-button"
               onClick={
@@ -1389,7 +1631,7 @@ ${jsCode || ""}
             <button
               className="generate-button"
               onClick={
-                handleStopGeneration
+                handleCancelGeneration
               }
             >
               <span>
@@ -1400,41 +1642,72 @@ ${jsCode || ""}
             </button>
           )}
 
-          {/* LIVE AI STATUS */}
+          {/* AI PROGRESS */}
 
-          {(isGenerating ||
-            aiMessage ||
-            generationError) && (
-            <div className="ai-live-status">
+          {(generating ||
+            generationStage ===
+              "complete") && (
+            <div className="ai-generation-panel">
 
-              <div className="ai-live-title">
-                {isGenerating
-                  ? "● LIVE"
-                  : aiStage ===
-                    "complete"
-                  ? "✓ COMPLETE"
-                  : "AI STATUS"}
+              <div className="ai-generation-top">
+
+                <span>
+                  {generationMessage}
+                </span>
+
+                <strong>
+                  {generationProgress}%
+                </strong>
+
               </div>
 
-              <div className="ai-live-message">
-                {aiMessage ||
-                  "AI is working..."}
+              <div className="ai-progress">
+
+                <div
+                  className="ai-progress-fill"
+                  style={{
+                    width:
+                      `${generationProgress}%`,
+                  }}
+                />
+
               </div>
 
-              {isGenerating && (
-                <div className="ai-progress">
-                  <span />
-                </div>
-              )}
-
-              {generationError && (
-                <div className="ai-error">
-                  {generationError}
-                </div>
+              {generationModel && (
+                <small>
+                  Powered by{" "}
+                  {generationModel}
+                </small>
               )}
 
             </div>
           )}
+
+          {/* ERROR */}
+
+          {generationError && (
+            <div className="ai-error">
+
+              <strong>
+                Generation failed
+              </strong>
+
+              <p>
+                {generationError}
+              </p>
+
+              <button
+                onClick={
+                  handleGenerate
+                }
+              >
+                Try Again
+              </button>
+
+            </div>
+          )}
+
+          {/* QUICK ACTIONS */}
 
           <div className="quick-section">
 
@@ -1445,7 +1718,7 @@ ${jsCode || ""}
             <button
               onClick={() =>
                 setPrompt(
-                  "Make the website modern and professional"
+                  "Make the website modern, premium and professional."
                 )
               }
             >
@@ -1455,7 +1728,7 @@ ${jsCode || ""}
             <button
               onClick={() =>
                 setPrompt(
-                  "Create a beautiful responsive mobile design"
+                  "Create a beautiful responsive mobile-first design."
                 )
               }
             >
@@ -1465,7 +1738,7 @@ ${jsCode || ""}
             <button
               onClick={() =>
                 setPrompt(
-                  "Improve typography, spacing and visual hierarchy"
+                  "Improve typography, spacing, hierarchy and visual polish."
                 )
               }
             >
@@ -1475,7 +1748,7 @@ ${jsCode || ""}
             <button
               onClick={() =>
                 setPrompt(
-                  "Add smooth animations and useful interactions"
+                  "Add smooth professional animations and useful interactions."
                 )
               }
             >
@@ -1491,10 +1764,10 @@ ${jsCode || ""}
             </span>
 
             <p>
-              Be specific about
-              colors, sections,
-              style and functionality
-              for better results.
+              Be specific about colors,
+              sections, style,
+              functionality and target
+              audience for better results.
             </p>
 
           </div>
@@ -1503,7 +1776,7 @@ ${jsCode || ""}
             className="settings-button"
             onClick={() =>
               setShowSettings(
-                !showSettings
+                true
               )
             }
           >
@@ -1521,11 +1794,13 @@ ${jsCode || ""}
             <div className="editor-toolbar">
 
               <div className="editor-title">
+
                 <span className="live-dot" />
 
-                {isGenerating
+                {generating
                   ? "AI Live Code"
                   : "Code Editor"}
+
               </div>
 
               <div className="editor-tabs">
@@ -1583,7 +1858,7 @@ ${jsCode || ""}
               <div className="editor-actions">
 
                 <button
-                  title="Refresh"
+                  title="Refresh Preview"
                   onClick={() =>
                     setPreviewKey(
                       (value) =>
@@ -1605,7 +1880,17 @@ ${jsCode || ""}
                 {Array.from(
                   {
                     length:
-                      lineCount,
+                      (
+                        activeTab ===
+                        "html"
+                          ? htmlCode
+                          : activeTab ===
+                            "css"
+                          ? cssCode
+                          : jsCode
+                      ).split(
+                        "\n"
+                      ).length,
                   },
                   (
                     _,
@@ -1623,51 +1908,68 @@ ${jsCode || ""}
 
               </div>
 
-              <textarea
-                className="premium-code-editor"
-                value={
-                  editorValue
-                }
-                onChange={(
-                  event
-                ) => {
-
-                  const value =
+              {activeTab ===
+                "html" && (
+                <textarea
+                  className="premium-code-editor"
+                  value={
+                    htmlCode
+                  }
+                  onChange={(
                     event
-                      .target
-                      .value;
-
-                  if (
-                    activeTab ===
-                    "html"
-                  ) {
+                  ) => {
                     setHtmlCode(
-                      value
+                      event.target
+                        .value
                     );
-                  }
 
-                  if (
-                    activeTab ===
-                    "css"
-                  ) {
+                    markChanged();
+                  }}
+                  spellCheck="false"
+                />
+              )}
+
+              {activeTab ===
+                "css" && (
+                <textarea
+                  className="premium-code-editor"
+                  value={
+                    cssCode
+                  }
+                  onChange={(
+                    event
+                  ) => {
                     setCssCode(
-                      value
+                      event.target
+                        .value
                     );
-                  }
 
-                  if (
-                    activeTab ===
-                    "js"
-                  ) {
+                    markChanged();
+                  }}
+                  spellCheck="false"
+                />
+              )}
+
+              {activeTab ===
+                "js" && (
+                <textarea
+                  className="premium-code-editor"
+                  value={
+                    jsCode
+                  }
+                  onChange={(
+                    event
+                  ) => {
                     setJsCode(
-                      value
+                      event.target
+                        .value
                     );
-                  }
 
-                  markChanged();
-                }}
-                spellCheck="false"
-              />
+                    markChanged();
+                  }}
+                  spellCheck="false"
+                />
+              )}
 
             </div>
 
@@ -1688,8 +1990,8 @@ ${jsCode || ""}
               </span>
 
               <span>
-                {isGenerating
-                  ? "● Streaming"
+                {generating
+                  ? "● Live generation"
                   : "Auto Preview"}
               </span>
 
@@ -1707,9 +2009,11 @@ ${jsCode || ""}
             <div className="preview-toolbar">
 
               <div className="preview-title">
+
                 <span className="live-dot" />
 
                 Live Preview
+
               </div>
 
               <div className="device-controls">
@@ -1769,7 +2073,8 @@ ${jsCode || ""}
                 <button
                   onClick={() =>
                     setFullscreen(
-                      !fullscreen
+                      (value) =>
+                        !value
                     )
                   }
                   title="Fullscreen"
@@ -1784,7 +2089,7 @@ ${jsCode || ""}
                         value + 1
                     )
                   }
-                  title="Refresh Preview"
+                  title="Refresh"
                 >
                   ↻
                 </button>
@@ -1798,6 +2103,7 @@ ${jsCode || ""}
               <div
                 className={`preview-device ${device}`}
               >
+
                 <iframe
                   key={
                     previewKey
@@ -1806,8 +2112,9 @@ ${jsCode || ""}
                   srcDoc={
                     previewDocument
                   }
-                  sandbox="allow-scripts"
+                  sandbox="allow-scripts allow-forms"
                 />
+
               </div>
 
             </div>
@@ -1846,6 +2153,7 @@ ${jsCode || ""}
             )
           }
         >
+
           <div
             className="settings-panel"
             onClick={(
@@ -1858,6 +2166,7 @@ ${jsCode || ""}
             <div className="settings-header">
 
               <div>
+
                 <span>
                   PROJECT
                 </span>
@@ -1865,6 +2174,7 @@ ${jsCode || ""}
                 <h2>
                   Settings
                 </h2>
+
               </div>
 
               <button
@@ -1880,6 +2190,7 @@ ${jsCode || ""}
             </div>
 
             <div className="setting-row">
+
               <div>
                 <strong>
                   Project Name
@@ -1889,9 +2200,11 @@ ${jsCode || ""}
                   {project.name}
                 </p>
               </div>
+
             </div>
 
             <div className="setting-row">
+
               <div>
                 <strong>
                   Project Type
@@ -1902,9 +2215,11 @@ ${jsCode || ""}
                     "Website"}
                 </p>
               </div>
+
             </div>
 
             <div className="setting-row">
+
               <div>
                 <strong>
                   Project ID
@@ -1914,11 +2229,14 @@ ${jsCode || ""}
                   {projectId}
                 </p>
               </div>
+
             </div>
 
           </div>
+
         </div>
       )}
+
     </div>
   );
 }

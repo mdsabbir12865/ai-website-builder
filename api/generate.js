@@ -1,243 +1,329 @@
-import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 
-const PRIMARY_MODEL = "gemini-3.7-flash";
-const FALLBACK_MODEL = "gemini-3.6-flash";
+const MODELS = [
+  "gpt-5.6",
+  "gpt-5.5",
+];
+
+const MAX_PROMPT_LENGTH = 12000;
+const MAX_CODE_LENGTH = 70000;
+const MAX_RETRIES = 2;
+const REQUEST_TIMEOUT = 90000;
 
 const SYSTEM_PROMPT = `
 You are the core AI engine of a premium AI Website Builder.
 
-Transform the user's request into a polished production-quality website
-using ONLY:
+You are simultaneously:
+- Senior frontend engineer
+- UI/UX designer
+- Product designer
+- Accessibility specialist
+- Responsive design expert
+- JavaScript engineer
 
-- HTML
-- CSS
-- Vanilla JavaScript
+Generate production-quality websites using ONLY:
 
-Return ONLY valid JSON:
+HTML
+CSS
+Vanilla JavaScript
 
-{
-  "html": "string",
-  "css": "string",
-  "js": "string"
-}
+==================================================
+OUTPUT FORMAT
+==================================================
 
-IMPORTANT:
-- html must contain ONLY content inside <body>
-- Never include <html>, <head>, <body>, <style>, or <script>
-- css must contain complete CSS
-- js must contain complete vanilla JavaScript
-- No Markdown
-- No code fences
-- No explanations outside JSON
+Return ONLY these exact sections:
 
-QUALITY:
-- Premium UI/UX
-- Modern typography
-- Strong visual hierarchy
-- Responsive desktop/tablet/mobile design
+<WEB_HTML>
+HTML BODY CONTENT
+</WEB_HTML>
+
+<WEB_CSS>
+CSS CONTENT
+</WEB_CSS>
+
+<WEB_JS>
+JAVASCRIPT CONTENT
+</WEB_JS>
+
+No Markdown.
+No triple backticks.
+No explanations.
+
+WEB_HTML must contain ONLY content inside <body>.
+
+Never include:
+<html>
+<head>
+<body>
+<style>
+<script>
+
+==================================================
+DESIGN
+==================================================
+
+Create a professional, premium and intentionally designed interface.
+
+Use an appropriate visual system:
+- typography
+- spacing
+- colors
+- hierarchy
+- cards
+- borders
+- shadows
+- gradients when appropriate
+- responsive layouts
+- hover states
+- focus states
+- transitions
+
+Do not blindly use the same design for every project.
+
+The design MUST match the user's request.
+
+==================================================
+RESPONSIVE
+==================================================
+
+Every website must work on:
+
+Desktop
+Tablet
+Mobile
+
+Use:
+- CSS Grid
+- Flexbox
+- fluid sizing
+- max-width containers
 - CSS variables
-- Flexbox/Grid
-- Good spacing
-- Hover/focus states
-- Accessible semantic HTML
-- Functional JavaScript when required
-- No horizontal overflow
-- No broken selectors
-- No fake functionality
-- No API keys or secrets
+- media queries
 
-RESPONSIVE:
-The website MUST work properly on:
-- Desktop
-- Tablet
-- Mobile
+Never create accidental horizontal scrolling.
 
-If a navbar exists:
-- Desktop navigation
-- Functional mobile hamburger menu
-- Accessible aria attributes
+Mobile navigation must work.
 
-If JavaScript is not required:
-return an empty string for js.
+==================================================
+JAVASCRIPT
+==================================================
 
-EXISTING WEBSITE:
-If existing HTML/CSS/JS is provided:
-- Preserve useful functionality
-- Modify only what the user requests when possible
-- Do not unnecessarily rebuild working sections
-- Return the COMPLETE updated HTML/CSS/JS
+Use ONLY vanilla JavaScript.
 
-Before returning the answer, internally verify:
-- HTML/CSS/JS work together
-- selectors match
-- buttons work
-- mobile layout works
-- JSON is valid
+Implement real interactions when appropriate:
+
+- mobile menu
+- tabs
+- FAQ
+- modal
+- filters
+- theme switch
+- counters
+- forms
+- navigation
+- buttons
+- interactive UI
+
+Do not create fake functionality.
+
+Never attach events to elements that do not exist.
+
+If JavaScript is unnecessary return an empty WEB_JS section.
+
+==================================================
+ACCESSIBILITY
+==================================================
+
+Use:
+- semantic HTML
+- accessible buttons
+- aria attributes when appropriate
+- meaningful labels
+- alt text
+- keyboard-friendly controls
+- visible focus states
+
+==================================================
+SEO
+==================================================
+
+Use:
+- logical headings
+- semantic structure
+- meaningful content
+- descriptive links
+
+Do not include meta tags because the builder supplies the document shell.
+
+==================================================
+IMAGES
+==================================================
+
+Do not use broken image URLs.
+
+If images are useful, use reliable remote image URLs and meaningful alt text.
+
+If images are unnecessary, create visual elements with CSS.
+
+==================================================
+EXISTING CODE
+==================================================
+
+If existing website code is supplied:
+
+- understand it first
+- preserve useful functionality
+- preserve useful structure
+- modify only what is requested when possible
+- fix obvious bugs
+- do not unnecessarily destroy working sections
+
+Always return COMPLETE updated HTML/CSS/JS.
+
+==================================================
+SECURITY
+==================================================
+
+Never generate:
+- API keys
+- passwords
+- secret credentials
+- credential theft
+- malware
+- destructive scripts
+- token theft
+- hidden tracking intended to steal data
+
+==================================================
+FINAL QUALITY CHECK
+==================================================
+
+Internally verify:
+
+HTML selectors match CSS.
+JavaScript selectors match HTML.
+Buttons work.
+Navigation works.
+Mobile layout works.
+No horizontal overflow.
+No broken references.
+No secrets.
+No malicious code.
+
+Then return ONLY the three WEB sections.
 `;
-
-function cleanJson(text) {
-  if (!text) return "";
-
-  let value = String(text).trim();
-
-  value = value
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  return value;
-}
-
-function isValidResult(result) {
-  return (
-    result &&
-    typeof result === "object" &&
-    typeof result.html === "string" &&
-    typeof result.css === "string" &&
-    typeof result.js === "string"
-  );
-}
-
-function getErrorStatus(error) {
-  return (
-    Number(error?.status) ||
-    Number(error?.code) ||
-    500
-  );
-}
-
-function getErrorMessage(error) {
-  if (!error) return "Unknown AI error.";
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  if (error.message) {
-    return String(error.message);
-  }
-
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return "Unknown AI error.";
-  }
-}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function generateWithModel(ai, model, prompt) {
-  console.log(`[AI] Starting model: ${model}`);
+function clean(value = "") {
+  return String(value)
+    .replace(/\r/g, "")
+    .replace(/```html/gi, "")
+    .replace(/```css/gi, "")
+    .replace(/```javascript/gi, "")
+    .replace(/```js/gi, "")
+    .replace(/```/g, "")
+    .trim();
+}
 
-  const startedAt = Date.now();
+function extract(text, start, end) {
+  const startIndex = text.indexOf(start);
 
-  const response = await ai.models.generateContent({
-    model,
+  if (startIndex === -1) return "";
 
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text: `${SYSTEM_PROMPT}
+  const contentStart = startIndex + start.length;
+  const endIndex = text.indexOf(end, contentStart);
 
-USER REQUEST:
-${prompt}`,
-          },
-        ],
-      },
-    ],
+  if (endIndex === -1) {
+    return text.slice(contentStart);
+  }
 
-    config: {
-      /*
-       * LOW thinking = faster first response.
-       * This is important for an interactive website builder.
-       */
-      thinkingConfig: {
-        thinkingLevel: "low",
-      },
+  return text.slice(contentStart, endIndex);
+}
 
-      responseMimeType: "application/json",
+function getStatus(error) {
+  return (
+    error?.status ||
+    error?.response?.status ||
+    error?.statusCode ||
+    500
+  );
+}
 
-      responseSchema: {
-        type: "object",
+function retryable(error) {
+  const status = getStatus(error);
 
-        properties: {
-          html: {
-            type: "string",
-          },
+  return [
+    408,
+    409,
+    429,
+    500,
+    502,
+    503,
+    504,
+  ].includes(status);
+}
 
-          css: {
-            type: "string",
-          },
+function getExistingCode(body) {
+  const current =
+    body?.currentCode || {
+      html: body?.html || "",
+      css: body?.css || "",
+      js: body?.js || "",
+    };
 
-          js: {
-            type: "string",
-          },
-        },
+  return {
+    html:
+      typeof current.html === "string"
+        ? current.html.slice(0, MAX_CODE_LENGTH)
+        : "",
 
-        required: ["html", "css", "js"],
-      },
-    },
+    css:
+      typeof current.css === "string"
+        ? current.css.slice(0, MAX_CODE_LENGTH)
+        : "",
+
+    js:
+      typeof current.js === "string"
+        ? current.js.slice(0, MAX_CODE_LENGTH)
+        : "",
+  };
+}
+
+function hasExistingCode(code) {
+  return Boolean(
+    code.html ||
+    code.css ||
+    code.js
+  );
+}
+
+async function withTimeout(promise, ms) {
+  let timer;
+
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new Error(
+          "OpenAI request timed out."
+        )
+      );
+    }, ms);
   });
 
-  const elapsed = Date.now() - startedAt;
-
-  console.log(
-    `[AI] ${model} completed in ${elapsed}ms`
-  );
-
-  const rawText = response?.text;
-
-  if (!rawText) {
-    throw new Error(
-      `${model} returned an empty response.`
-    );
-  }
-
-  const cleaned = cleanJson(rawText);
-
-  let result;
-
   try {
-    result = JSON.parse(cleaned);
-  } catch (error) {
-    console.error(
-      `[AI] ${model} returned invalid JSON`
-    );
-
-    console.error(
-      "[AI] Raw response:",
-      cleaned.slice(0, 2000)
-    );
-
-    throw new Error(
-      `${model} returned invalid JSON.`
-    );
+    return await Promise.race([
+      promise,
+      timeout,
+    ]);
+  } finally {
+    clearTimeout(timer);
   }
-
-  if (!isValidResult(result)) {
-    throw new Error(
-      `${model} returned an invalid website structure.`
-    );
-  }
-
-  return result;
 }
 
 export default async function handler(req, res) {
-  const requestId =
-    `gen_${Date.now()}_${Math.random()
-      .toString(36)
-      .slice(2, 8)}`;
-
-  console.log(
-    `[AI] Request started: ${requestId}`
-  );
-
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -245,270 +331,236 @@ export default async function handler(req, res) {
     });
   }
 
-  try {
-    const apiKey =
-      process.env.GEMINI_API_KEY;
+  const apiKey =
+    process.env.OPENAI_API_KEY;
 
-    if (!apiKey) {
-      console.error(
-        `[AI] ${requestId}: GEMINI_API_KEY missing`
-      );
+  if (!apiKey) {
+    return res.status(500).json({
+      success: false,
+      error:
+        "OPENAI_API_KEY is not configured.",
+    });
+  }
 
-      return res.status(500).json({
-        success: false,
-        error:
-          "GEMINI_API_KEY is not configured.",
-      });
-    }
+  const body = req.body || {};
 
-    const body = req.body || {};
+  const prompt =
+    typeof body.prompt === "string"
+      ? body.prompt.trim()
+      : "";
 
-    const userPrompt =
-      typeof body.prompt === "string"
-        ? body.prompt.trim()
-        : "";
+  if (!prompt) {
+    return res.status(400).json({
+      success: false,
+      error:
+        "Please enter a website request.",
+    });
+  }
 
-    if (!userPrompt) {
-      return res.status(400).json({
-        success: false,
-        error:
-          "Please enter a website request.",
-      });
-    }
+  if (
+    prompt.length >
+    MAX_PROMPT_LENGTH
+  ) {
+    return res.status(400).json({
+      success: false,
+      error:
+        "Prompt is too long.",
+    });
+  }
 
-    const currentCode =
-      body.currentCode || {
-        html:
-          typeof body.html === "string"
-            ? body.html
-            : "",
+  const existing =
+    getExistingCode(body);
 
-        css:
-          typeof body.css === "string"
-            ? body.css
-            : "",
+  let existingContext = "";
 
-        js:
-          typeof body.js === "string"
-            ? body.js
-            : "",
-      };
-
-    let existingCode = "";
-
-    const hasExistingCode =
-      currentCode.html ||
-      currentCode.css ||
-      currentCode.js;
-
-    if (hasExistingCode) {
-      existingCode = `
-
+  if (hasExistingCode(existing)) {
+    existingContext = `
 ==================================================
-EXISTING WEBSITE CODE
+EXISTING WEBSITE
 ==================================================
 
 HTML:
-${currentCode.html || ""}
+${existing.html}
 
 CSS:
-${currentCode.css || ""}
+${existing.css}
 
 JAVASCRIPT:
-${currentCode.js || ""}
+${existing.js}
 
 ==================================================
 
-Use this existing website as the starting point.
+Modify the existing website intelligently.
 
 Preserve useful functionality.
 
-Modify it according to the user's request.
-
 Return the COMPLETE updated website.
 `;
-    }
+  }
 
-    const finalPrompt = `
-${userPrompt}
+  const input = `
+USER REQUEST:
 
-${existingCode}
+${prompt}
+
+${existingContext}
 `;
 
-    const ai = new GoogleGenAI({
+  const client =
+    new OpenAI({
       apiKey,
     });
 
-    /*
-     * FIRST TRY
-     * Gemini 3.7 Flash
-     */
-    try {
-      console.log(
-        `[AI] ${requestId}: Trying ${PRIMARY_MODEL}`
-      );
+  let lastError = null;
 
-      const result =
-        await generateWithModel(
-          ai,
-          PRIMARY_MODEL,
-          finalPrompt
-        );
-
-      console.log(
-        `[AI] ${requestId}: Success with ${PRIMARY_MODEL}`
-      );
-
-      return res.status(200).json({
-        success: true,
-        model: PRIMARY_MODEL,
-        requestId,
-        html: result.html,
-        css: result.css,
-        js: result.js,
-      });
-    } catch (primaryError) {
-      const status =
-        getErrorStatus(primaryError);
-
-      const message =
-        getErrorMessage(primaryError);
-
-      console.error(
-        `[AI] ${requestId}: ${PRIMARY_MODEL} failed`
-      );
-
-      console.error(
-        `[AI] Status: ${status}`
-      );
-
-      console.error(
-        `[AI] Message: ${message}`
-      );
-
-      /*
-       * If Gemini 3.7 is temporarily busy,
-       * immediately try Gemini 3.6 Flash.
-       */
-      const shouldFallback =
-        status === 429 ||
-        status === 500 ||
-        status === 502 ||
-        status === 503 ||
-        status === 504;
-
-      if (!shouldFallback) {
-        return res.status(
-          status >= 400 && status < 600
-            ? status
-            : 500
-        ).json({
-          success: false,
-          error: message,
-          requestId,
-        });
-      }
-
-      console.log(
-        `[AI] ${requestId}: Falling back to ${FALLBACK_MODEL}`
-      );
-
-      /*
-       * Tiny delay prevents an immediate
-       * hammering retry.
-       */
-      await sleep(250);
-
+  for (
+    const model of MODELS
+  ) {
+    for (
+      let attempt = 0;
+      attempt <= MAX_RETRIES;
+      attempt++
+    ) {
       try {
-        const result =
-          await generateWithModel(
-            ai,
-            FALLBACK_MODEL,
-            finalPrompt
+        if (attempt > 0) {
+          await sleep(
+            Math.min(
+              1000 *
+                Math.pow(
+                  2,
+                  attempt - 1
+                ),
+              5000
+            )
           );
+        }
 
         console.log(
-          `[AI] ${requestId}: Fallback success`
+          `[AI] ${model} attempt ${
+            attempt + 1
+          }`
+        );
+
+        const response =
+          await withTimeout(
+            client.responses.create({
+              model,
+
+              instructions:
+                SYSTEM_PROMPT,
+
+              input,
+
+              max_output_tokens:
+                30000,
+            }),
+
+            REQUEST_TIMEOUT
+          );
+
+        const text =
+          response.output_text || "";
+
+        if (!text) {
+          throw new Error(
+            "OpenAI returned an empty response."
+          );
+        }
+
+        const html = clean(
+          extract(
+            text,
+            "<WEB_HTML>",
+            "</WEB_HTML>"
+          )
+        );
+
+        const css = clean(
+          extract(
+            text,
+            "<WEB_CSS>",
+            "</WEB_CSS>"
+          )
+        );
+
+        const js = clean(
+          extract(
+            text,
+            "<WEB_JS>",
+            "</WEB_JS>"
+          )
+        );
+
+        if (
+          !html &&
+          !css &&
+          !js
+        ) {
+          throw new Error(
+            "OpenAI returned invalid website sections."
+          );
+        }
+
+        console.log(
+          `[AI] ${model} generation successful`
         );
 
         return res.status(200).json({
           success: true,
-          model: FALLBACK_MODEL,
-          fallback: true,
-          requestId,
-          html: result.html,
-          css: result.css,
-          js: result.js,
+          model,
+          html,
+          css,
+          js,
         });
-      } catch (fallbackError) {
-        const fallbackStatus =
-          getErrorStatus(
-            fallbackError
-          );
-
-        const fallbackMessage =
-          getErrorMessage(
-            fallbackError
-          );
+      } catch (error) {
+        lastError = error;
 
         console.error(
-          `[AI] ${requestId}: ${FALLBACK_MODEL} failed`
+          `[AI] ${model} attempt ${
+            attempt + 1
+          } failed`,
+          error
         );
 
-        console.error(
-          `[AI] Fallback status: ${fallbackStatus}`
-        );
-
-        console.error(
-          `[AI] Fallback message: ${fallbackMessage}`
-        );
-
-        return res.status(503).json({
-          success: false,
-
-          error:
-            "Gemini is temporarily unavailable. Please try again in a few seconds.",
-
-          details:
-            fallbackMessage,
-
-          requestId,
-
-          primaryModel:
-            PRIMARY_MODEL,
-
-          fallbackModel:
-            FALLBACK_MODEL,
-        });
+        if (!retryable(error)) {
+          break;
+        }
       }
     }
-  } catch (error) {
-    const status =
-      getErrorStatus(error);
-
-    const message =
-      getErrorMessage(error);
-
-    console.error(
-      `[AI] ${requestId}: Unexpected server error`
-    );
-
-    console.error(
-      `[AI] Status: ${status}`
-    );
-
-    console.error(
-      `[AI] Message: ${message}`
-    );
-
-    return res.status(
-      status >= 400 && status < 600
-        ? status
-        : 500
-    ).json({
-      success: false,
-      error: message,
-      requestId,
-    });
   }
+
+  const status =
+    getStatus(lastError);
+
+  let message =
+    "AI generation failed. Please try again.";
+
+  if (status === 429) {
+    message =
+      "AI rate limit reached. Please wait a moment and try again.";
+  }
+
+  if (
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  ) {
+    message =
+      "AI service is temporarily busy. Please try again in a few seconds.";
+  }
+
+  if (status === 401) {
+    message =
+      "OpenAI API key is invalid or unavailable.";
+  }
+
+  return res.status(
+    status >= 400 &&
+    status < 600
+      ? status
+      : 500
+  ).json({
+    success: false,
+    error: message,
+  });
 }

@@ -1,256 +1,192 @@
-import { GoogleGenAI } from "@google/genai";
-
-/*
-============================================================
- WebAI Builder — Fast AI Streaming Engine
-============================================================
-
-Features:
-✓ Gemini 3.7 Flash
-✓ Gemini 3.6 Flash fallback
-✓ Gemini 3.5 Flash-Lite fast fallback
-✓ Gemini 2.5 Flash-Lite fallback
-✓ Fast retry
-✓ SSE streaming
-✓ Live HTML/CSS/JS chunks
-✓ Existing-code editing
-✓ Request validation
-✓ Client disconnect protection
-✓ Error classification
-✓ No API key exposed to frontend
-============================================================
-*/
-
-export const maxDuration = 60;
+import OpenAI from "openai";
 
 const MODELS = [
-  "gemini-3.7-flash",
-  "gemini-3.6-flash",
-  "gemini-3.5-flash-lite",
-  "gemini-2.5-flash-lite",
+  "gpt-5.6",
+  "gpt-5.5",
 ];
 
 const MAX_PROMPT_LENGTH = 12000;
 const MAX_CODE_LENGTH = 70000;
-const MAX_OUTPUT_TOKENS = 24000;
-
-const RETRYABLE_STATUS = new Set([
-  429,
-  500,
-  502,
-  503,
-  504,
-]);
+const MAX_RETRIES = 2;
 
 const SYSTEM_PROMPT = `
-You are WebAI Builder, a premium AI website generation engine.
+You are the core AI engine of a premium AI Website Builder.
 
-Your job is to create or modify complete production-quality websites.
+Act as:
+- Senior frontend engineer
+- UI/UX designer
+- Product designer
+- Accessibility specialist
+- Responsive design expert
+- JavaScript engineer
 
-TECHNOLOGY:
-- HTML5
-- CSS3
-- Vanilla JavaScript only
+Generate production-quality websites using ONLY:
 
-Do not use React.
-Do not use Vue.
-Do not use Angular.
-Do not use external JavaScript frameworks.
+HTML
+CSS
+Vanilla JavaScript
 
-============================================================
-OUTPUT FORMAT
-============================================================
+==================================================
+STREAM OUTPUT FORMAT
+==================================================
 
-Return ONLY these three sections:
+Return ONLY:
 
 <WEB_HTML>
-body content
+HTML BODY
 </WEB_HTML>
 
 <WEB_CSS>
-complete CSS
+CSS
 </WEB_CSS>
 
 <WEB_JS>
-complete JavaScript
+JAVASCRIPT
 </WEB_JS>
 
-Do NOT use markdown.
-Do NOT use triple backticks.
-Do NOT include explanations.
+Never use Markdown.
+Never use triple backticks.
+Never include explanations.
 
-WEB_HTML must contain BODY CONTENT ONLY.
+HTML must ONLY contain body content.
 
-Do not include:
+Never include:
 <html>
 <head>
 <body>
+<style>
+<script>
 
-============================================================
+==================================================
 DESIGN
-============================================================
+==================================================
 
-Create a premium modern design.
+Create a premium, modern and intentionally designed website.
 
-Use when appropriate:
-
-- CSS variables
-- modern typography
-- responsive containers
-- CSS Grid
-- Flexbox
-- gradients
-- subtle shadows
+Use:
+- strong typography
+- spacing system
+- color system
+- hierarchy
+- responsive layouts
+- cards when appropriate
+- shadows
 - borders
-- modern radius
+- transitions
 - hover states
 - focus states
-- smooth animations
-- micro interactions
-- visual hierarchy
+
+Match the requested style.
 
 Do not blindly use gradients or glassmorphism.
 
-The design must look intentionally designed, not like a beginner template.
-
-============================================================
+==================================================
 RESPONSIVE
-============================================================
-
-The website must work correctly on:
+==================================================
 
 Desktop
 Tablet
 Mobile
 
-Use responsive CSS.
+Use Grid, Flexbox, CSS variables and media queries.
 
 Avoid horizontal overflow.
 
-Navigation must work on mobile.
+Mobile navigation must work.
 
-Cards and grids must adapt naturally.
+==================================================
+JAVASCRIPT
+==================================================
 
-Buttons must remain usable on touch devices.
+Use vanilla JavaScript only.
 
-============================================================
+Implement real functionality when appropriate:
+
+mobile menu
+tabs
+FAQ
+modal
+filters
+theme toggle
+forms
+counters
+interactive controls
+smooth navigation
+
+Never reference missing DOM elements.
+
+If JavaScript is unnecessary return empty WEB_JS.
+
+==================================================
 ACCESSIBILITY
-============================================================
+==================================================
 
 Use semantic HTML.
 
-Use:
+Use accessible buttons.
 
-aria-label
-aria-expanded
-aria-controls
-alt
-button
-label
-input
+Use aria attributes where appropriate.
+
+Use meaningful alt text.
 
 Provide visible focus states.
 
-Do not use clickable divs when a button is appropriate.
-
-============================================================
-JAVASCRIPT
-============================================================
-
-Use vanilla JavaScript.
-
-Implement real functionality when requested.
-
-Examples:
-
-- mobile menu
-- tabs
-- accordion
-- modal
-- form validation
-- filtering
-- search
-- theme switch
-- counters
-- smooth scrolling
-- interactive buttons
-
-Never create fake functionality.
-
-Never reference elements that do not exist.
-
-If JavaScript is unnecessary, return an empty WEB_JS section.
-
-============================================================
+==================================================
 EXISTING CODE
-============================================================
+==================================================
 
-If existing website code is provided:
+If existing code is supplied:
 
-1. Understand the existing website.
-2. Preserve useful functionality.
-3. Preserve useful structure.
-4. Fix obvious bugs.
-5. Apply the user's requested changes.
-6. Return the COMPLETE updated website.
+understand it first.
 
-Never return only a small fragment when modifying an existing website.
+Preserve working features.
 
-============================================================
-QUALITY CHECK
-============================================================
+Modify only what the user requests when possible.
 
-Before responding internally verify:
+Fix obvious issues.
 
-- HTML selectors match CSS.
-- CSS classes actually exist.
-- JavaScript selectors actually exist.
-- Buttons work.
-- Navigation works.
-- Mobile layout works.
-- No accidental horizontal scrolling.
-- No broken references.
-- No API keys.
-- No secrets.
-- No malicious code.
+Return COMPLETE updated HTML/CSS/JS.
 
-============================================================
+==================================================
 SECURITY
-============================================================
+==================================================
 
 Never generate:
 
-- API keys
-- passwords
-- credential theft
-- malware
-- destructive code
-- secret tokens
-- hidden tracking
-- phishing systems
+API keys
+password theft
+credential harvesting
+malware
+destructive scripts
+secret tokens
+data theft
 
-============================================================
+==================================================
+QUALITY
+==================================================
+
+Internally verify:
+
+HTML matches CSS.
+CSS matches HTML.
+JavaScript matches HTML.
+Buttons work.
+Navigation works.
+Mobile works.
+No horizontal overflow.
+No broken references.
+
+Then output ONLY the three WEB sections.
 `;
 
 function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function getStatus(error) {
-  return (
-    error?.status ??
-    error?.response?.status ??
-    error?.statusCode ??
-    error?.error?.code ??
-    500
+  return new Promise(
+    (resolve) =>
+      setTimeout(resolve, ms)
   );
 }
 
-function isRetryable(error) {
-  return RETRYABLE_STATUS.has(getStatus(error));
-}
-
-function cleanText(value = "") {
+function clean(value = "") {
   return String(value)
     .replace(/\r/g, "")
     .replace(/```html/gi, "")
@@ -260,146 +196,139 @@ function cleanText(value = "") {
     .replace(/```/g, "");
 }
 
-function sendEvent(res, event, data) {
-  try {
-    if (res.writableEnded) return;
+function extract(
+  text,
+  start,
+  end
+) {
+  const startIndex =
+    text.indexOf(start);
 
-    res.write(
-      `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
-    );
-  } catch (error) {
-    console.error("[SSE] write failed:", error);
-  }
-}
-
-function getExistingCode(body) {
-  const current = body.currentCode || {};
-
-  const html =
-    typeof current.html === "string"
-      ? current.html
-      : "";
-
-  const css =
-    typeof current.css === "string"
-      ? current.css
-      : "";
-
-  const js =
-    typeof current.js === "string"
-      ? current.js
-      : "";
-
-  if (!html && !css && !js) {
-    return "";
-  }
-
-  return `
-============================================================
-CURRENT WEBSITE CODE
-============================================================
-
-HTML:
-${html.slice(0, MAX_CODE_LENGTH)}
-
-CSS:
-${css.slice(0, MAX_CODE_LENGTH)}
-
-JAVASCRIPT:
-${js.slice(0, MAX_CODE_LENGTH)}
-
-============================================================
-`;
-}
-
-function extractSection(text, startTag, endTag) {
-  const start = text.indexOf(startTag);
-
-  if (start === -1) {
+  if (startIndex === -1) {
     return null;
   }
 
-  const contentStart = start + startTag.length;
+  const contentStart =
+    startIndex + start.length;
 
-  const end = text.indexOf(endTag, contentStart);
-
-  if (end === -1) {
-    return {
-      complete: false,
-      content: text.slice(contentStart),
-    };
-  }
+  const endIndex =
+    text.indexOf(
+      end,
+      contentStart
+    );
 
   return {
-    complete: true,
-    content: text.slice(contentStart, end),
+    content:
+      endIndex === -1
+        ? text.slice(
+            contentStart
+          )
+        : text.slice(
+            contentStart,
+            endIndex
+          ),
+
+    complete:
+      endIndex !== -1,
   };
 }
 
-function extractResult(text) {
-  const html =
-    extractSection(
-      text,
-      "<WEB_HTML>",
-      "</WEB_HTML>"
-    )?.content || "";
+function statusOf(error) {
+  return (
+    error?.status ||
+    error?.response?.status ||
+    error?.statusCode ||
+    500
+  );
+}
 
-  const css =
-    extractSection(
-      text,
-      "<WEB_CSS>",
-      "</WEB_CSS>"
-    )?.content || "";
+function shouldRetry(error) {
+  return [
+    408,
+    409,
+    429,
+    500,
+    502,
+    503,
+    504,
+  ].includes(
+    statusOf(error)
+  );
+}
 
-  const js =
-    extractSection(
-      text,
-      "<WEB_JS>",
-      "</WEB_JS>"
-    )?.content || "";
+function sendEvent(
+  res,
+  event,
+  data
+) {
+  try {
+    res.write(
+      `event: ${event}\n` +
+      `data: ${JSON.stringify(
+        data
+      )}\n\n`
+    );
+  } catch {
+    // client disconnected
+  }
+}
+
+function existingCode(body) {
+  const code =
+    body?.currentCode || {};
 
   return {
-    html: cleanText(html).trim(),
-    css: cleanText(css).trim(),
-    js: cleanText(js).trim(),
+    html:
+      typeof code.html === "string"
+        ? code.html.slice(
+            0,
+            MAX_CODE_LENGTH
+          )
+        : "",
+
+    css:
+      typeof code.css === "string"
+        ? code.css.slice(
+            0,
+            MAX_CODE_LENGTH
+          )
+        : "",
+
+    js:
+      typeof code.js === "string"
+        ? code.js.slice(
+            0,
+            MAX_CODE_LENGTH
+          )
+        : "",
   };
 }
 
-function errorMessage(status) {
-  if (status === 429) {
-    return "AI rate limit reached. Trying another model...";
-  }
-
-  if (
-    status === 500 ||
-    status === 502 ||
-    status === 503 ||
-    status === 504
-  ) {
-    return "AI model is temporarily busy. Trying another model...";
-  }
-
-  return "AI generation failed.";
-}
-
-export default async function handler(req, res) {
+export default async function handler(
+  req,
+  res
+) {
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
-      error: "Method not allowed.",
+      error:
+        "Method not allowed.",
     });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey =
+    process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
     return res.status(500).json({
       success: false,
-      error: "GEMINI_API_KEY is not configured.",
+      error:
+        "OPENAI_API_KEY is not configured.",
     });
   }
 
-  const body = req.body || {};
+  const body =
+    req.body || {};
 
   const prompt =
     typeof body.prompt === "string"
@@ -409,14 +338,19 @@ export default async function handler(req, res) {
   if (!prompt) {
     return res.status(400).json({
       success: false,
-      error: "Please enter a website request.",
+      error:
+        "Please enter a website request.",
     });
   }
 
-  if (prompt.length > MAX_PROMPT_LENGTH) {
+  if (
+    prompt.length >
+    MAX_PROMPT_LENGTH
+  ) {
     return res.status(400).json({
       success: false,
-      error: "Prompt is too long.",
+      error:
+        "Prompt is too long.",
     });
   }
 
@@ -440,352 +374,482 @@ export default async function handler(req, res) {
     "no"
   );
 
-  if (typeof res.flushHeaders === "function") {
+  if (
+    typeof res.flushHeaders ===
+    "function"
+  ) {
     res.flushHeaders();
   }
 
-  let disconnected = false;
+  const code =
+    existingCode(body);
 
-  req.on("close", () => {
-    disconnected = true;
-  });
+  const hasExisting =
+    code.html ||
+    code.css ||
+    code.js;
 
-  sendEvent(res, "status", {
-    stage: "starting",
-    message: "Starting AI...",
-  });
+  let existingContext = "";
 
-  const existingCode = getExistingCode(body);
+  if (hasExisting) {
+    existingContext = `
+==================================================
+EXISTING WEBSITE
+==================================================
 
-  const finalPrompt = `
+HTML:
+${code.html}
+
+CSS:
+${code.css}
+
+JAVASCRIPT:
+${code.js}
+
+==================================================
+
+Preserve useful existing functionality.
+
+Return the COMPLETE updated website.
+`;
+  }
+
+  const input = `
 USER REQUEST:
 
 ${prompt}
 
-${existingCode}
-
-Generate the COMPLETE website.
-
-Output exactly:
-
-<WEB_HTML>
-...
-</WEB_HTML>
-
-<WEB_CSS>
-...
-</WEB_CSS>
-
-<WEB_JS>
-...
-</WEB_JS>
+${existingContext}
 `;
 
-  const ai = new GoogleGenAI({
-    apiKey,
-  });
+  const client =
+    new OpenAI({
+      apiKey,
+    });
+
+  sendEvent(
+    res,
+    "status",
+    {
+      stage: "thinking",
+      message:
+        "Understanding your idea...",
+    }
+  );
 
   let stream = null;
   let selectedModel = null;
   let lastError = null;
 
   /*
-  ==========================================================
-  FAST MODEL FALLBACK
-  ==========================================================
+  ========================================================
+  CONNECT WITH MODEL
+  ========================================================
   */
 
-  for (let modelIndex = 0; modelIndex < MODELS.length; modelIndex++) {
-    if (disconnected) return;
-
-    const model = MODELS[modelIndex];
-
-    /*
-    First attempt
-    */
-
-    try {
-      sendEvent(res, "status", {
-        stage: "connecting",
-        message:
-          modelIndex === 0
-            ? "Connecting to AI..."
-            : `Switching to backup AI model...`,
-        model,
-      });
-
-      console.log(
-        `[AI] Trying ${model}`
-      );
-
-      stream =
-        await ai.models.generateContentStream({
-          model,
-
-          contents: [
+  for (
+    const model of MODELS
+  ) {
+    for (
+      let attempt = 0;
+      attempt <= MAX_RETRIES;
+      attempt++
+    ) {
+      try {
+        if (attempt > 0) {
+          sendEvent(
+            res,
+            "status",
             {
-              role: "user",
-              parts: [
-                {
-                  text:
-                    SYSTEM_PROMPT +
-                    "\n\n" +
-                    finalPrompt,
-                },
-              ],
-            },
-          ],
-
-          config: {
-            maxOutputTokens: MAX_OUTPUT_TOKENS,
-          },
-        });
-
-      selectedModel = model;
-
-      console.log(
-        `[AI] Connected to ${model}`
-      );
-
-      break;
-    } catch (error) {
-      lastError = error;
-
-      const status = getStatus(error);
-
-      console.error(
-        `[AI] ${model} attempt 1 failed`,
-        error
-      );
-
-      sendEvent(res, "status", {
-        stage: "fallback",
-        message: errorMessage(status),
-        status,
-      });
-
-      /*
-      --------------------------------------------------------
-      Quick retry ONLY for temporary errors.
-      --------------------------------------------------------
-      */
-
-      if (
-        isRetryable(error) &&
-        !disconnected
-      ) {
-        await sleep(650);
-
-        try {
-          console.log(
-            `[AI] ${model} quick retry`
+              stage: "retrying",
+              message:
+                "Retrying AI connection...",
+              attempt,
+            }
           );
 
-          stream =
-            await ai.models.generateContentStream({
-              model,
-
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    {
-                      text:
-                        SYSTEM_PROMPT +
-                        "\n\n" +
-                        finalPrompt,
-                    },
-                  ],
-                },
-              ],
-
-              config: {
-                maxOutputTokens:
-                  MAX_OUTPUT_TOKENS,
-              },
-            });
-
-          selectedModel = model;
-
-          console.log(
-            `[AI] ${model} retry succeeded`
+          await sleep(
+            Math.min(
+              1000 *
+                Math.pow(
+                  2,
+                  attempt - 1
+                ),
+              4000
+            )
           );
+        }
 
+        sendEvent(
+          res,
+          "status",
+          {
+            stage: "connecting",
+            message:
+              "Connecting to AI...",
+            model,
+          }
+        );
+
+        stream =
+          await client.responses.create({
+            model,
+
+            instructions:
+              SYSTEM_PROMPT,
+
+            input,
+
+            stream: true,
+
+            max_output_tokens:
+              30000,
+          });
+
+        selectedModel =
+          model;
+
+        console.log(
+          `[AI] Connected to ${model}`
+        );
+
+        break;
+      } catch (error) {
+        lastError = error;
+
+        console.error(
+          `[AI] ${model} attempt ${
+            attempt + 1
+          } failed`,
+          error
+        );
+
+        if (
+          !shouldRetry(error)
+        ) {
           break;
-        } catch (retryError) {
-          lastError = retryError;
-
-          console.error(
-            `[AI] ${model} attempt 2 failed`,
-            retryError
-          );
         }
       }
     }
+
+    if (stream) break;
   }
 
   if (!stream) {
-    const status = getStatus(lastError);
+    const status =
+      statusOf(lastError);
 
-    console.error(
-      "[AI] All models failed",
-      lastError
+    let message =
+      "AI generation failed.";
+
+    if (status === 429) {
+      message =
+        "AI rate limit reached. Please wait a moment.";
+    } else if (
+      status === 502 ||
+      status === 503 ||
+      status === 504
+    ) {
+      message =
+        "AI service is temporarily busy. Please try again.";
+    } else if (status === 401) {
+      message =
+        "OpenAI API key is invalid.";
+    }
+
+    sendEvent(
+      res,
+      "error",
+      {
+        message,
+        status,
+      }
     );
-
-    sendEvent(res, "error", {
-      message:
-        status === 503
-          ? "All AI models are temporarily busy. Please try again shortly."
-          : status === 429
-          ? "AI rate limit reached. Please try again shortly."
-          : "AI generation failed. Please try again.",
-      status,
-    });
 
     return res.end();
   }
 
   /*
-  ==========================================================
-  STREAMING
-  ==========================================================
+  ========================================================
+  STREAM GENERATION
+  ========================================================
   */
 
   let fullText = "";
 
-  let lastHtmlLength = 0;
-  let lastCssLength = 0;
-  let lastJsLength = 0;
+  let htmlSent = 0;
+  let cssSent = 0;
+  let jsSent = 0;
 
-  sendEvent(res, "status", {
-    stage: "generating",
-    message: "AI is writing your website...",
-    model: selectedModel,
-  });
+  let stage =
+    "generating";
+
+  sendEvent(
+    res,
+    "status",
+    {
+      stage,
+      message:
+        "AI is generating your website...",
+      model: selectedModel,
+    }
+  );
 
   try {
-    for await (const chunk of stream) {
-      if (disconnected) {
-        console.log(
-          "[AI] Client disconnected."
-        );
-        return;
-      }
-
-      const text =
-        typeof chunk?.text === "string"
-          ? chunk.text
-          : "";
-
-      if (!text) continue;
-
-      fullText += text;
-
+    for await (
+      const event of stream
+    ) {
       /*
-      --------------------------------------------------------
-      HTML
-      --------------------------------------------------------
+      ------------------------------------------
+      TEXT DELTA
+      ------------------------------------------
       */
 
-      const htmlPart = extractSection(
-        fullText,
-        "<WEB_HTML>",
-        "</WEB_HTML>"
-      );
+      if (
+        event.type ===
+        "response.output_text.delta"
+      ) {
+        const delta =
+          event.delta || "";
 
-      if (htmlPart) {
-        const html = cleanText(
+        if (!delta) continue;
+
+        fullText += delta;
+
+        /*
+        ----------------------------------------
+        HTML
+        ----------------------------------------
+        */
+
+        const htmlPart =
+          extract(
+            fullText,
+            "<WEB_HTML>",
+            "</WEB_HTML>"
+          );
+
+        if (
+          htmlPart &&
           htmlPart.content
-        );
+        ) {
+          const html =
+            clean(
+              htmlPart.content
+            );
 
-        if (html.length > lastHtmlLength) {
-          const delta =
-            html.slice(lastHtmlLength);
+          if (
+            html.length >
+            htmlSent
+          ) {
+            const newDelta =
+              html.slice(
+                htmlSent
+              );
 
-          lastHtmlLength = html.length;
+            htmlSent =
+              html.length;
 
-          sendEvent(res, "code", {
-            type: "html",
-            delta,
-            value: html,
-            complete: htmlPart.complete,
-          });
+            if (
+              stage !== "html"
+            ) {
+              stage = "html";
+
+              sendEvent(
+                res,
+                "status",
+                {
+                  stage: "html",
+                  message:
+                    "Writing HTML...",
+                }
+              );
+            }
+
+            sendEvent(
+              res,
+              "code",
+              {
+                type: "html",
+                delta: newDelta,
+                value: html,
+                complete:
+                  htmlPart.complete,
+              }
+            );
+          }
         }
-      }
 
-      /*
-      --------------------------------------------------------
-      CSS
-      --------------------------------------------------------
-      */
+        /*
+        ----------------------------------------
+        CSS
+        ----------------------------------------
+        */
 
-      const cssPart = extractSection(
-        fullText,
-        "<WEB_CSS>",
-        "</WEB_CSS>"
-      );
+        const cssPart =
+          extract(
+            fullText,
+            "<WEB_CSS>",
+            "</WEB_CSS>"
+          );
 
-      if (cssPart) {
-        const css = cleanText(
+        if (
+          cssPart &&
           cssPart.content
-        );
+        ) {
+          const css =
+            clean(
+              cssPart.content
+            );
 
-        if (css.length > lastCssLength) {
-          const delta =
-            css.slice(lastCssLength);
+          if (
+            css.length >
+            cssSent
+          ) {
+            const newDelta =
+              css.slice(
+                cssSent
+              );
 
-          lastCssLength = css.length;
+            cssSent =
+              css.length;
 
-          sendEvent(res, "code", {
-            type: "css",
-            delta,
-            value: css,
-            complete: cssPart.complete,
-          });
+            if (
+              stage !== "css"
+            ) {
+              stage = "css";
+
+              sendEvent(
+                res,
+                "status",
+                {
+                  stage: "css",
+                  message:
+                    "Designing CSS...",
+                }
+              );
+            }
+
+            sendEvent(
+              res,
+              "code",
+              {
+                type: "css",
+                delta: newDelta,
+                value: css,
+                complete:
+                  cssPart.complete,
+              }
+            );
+          }
         }
-      }
 
-      /*
-      --------------------------------------------------------
-      JAVASCRIPT
-      --------------------------------------------------------
-      */
+        /*
+        ----------------------------------------
+        JAVASCRIPT
+        ----------------------------------------
+        */
 
-      const jsPart = extractSection(
-        fullText,
-        "<WEB_JS>",
-        "</WEB_JS>"
-      );
+        const jsPart =
+          extract(
+            fullText,
+            "<WEB_JS>",
+            "</WEB_JS>"
+          );
 
-      if (jsPart) {
-        const js = cleanText(
+        if (
+          jsPart &&
           jsPart.content
-        );
+        ) {
+          const js =
+            clean(
+              jsPart.content
+            );
 
-        if (js.length > lastJsLength) {
-          const delta =
-            js.slice(lastJsLength);
+          if (
+            js.length >
+            jsSent
+          ) {
+            const newDelta =
+              js.slice(
+                jsSent
+              );
 
-          lastJsLength = js.length;
+            jsSent =
+              js.length;
 
-          sendEvent(res, "code", {
-            type: "js",
-            delta,
-            value: js,
-            complete: jsPart.complete,
-          });
+            if (
+              stage !== "js"
+            ) {
+              stage = "js";
+
+              sendEvent(
+                res,
+                "status",
+                {
+                  stage: "js",
+                  message:
+                    "Adding interactions...",
+                }
+              );
+            }
+
+            sendEvent(
+              res,
+              "code",
+              {
+                type: "js",
+                delta: newDelta,
+                value: js,
+                complete:
+                  jsPart.complete,
+              }
+            );
+          }
         }
       }
     }
 
     /*
-    ========================================================
+    ======================================================
     FINAL RESULT
-    ========================================================
+    ======================================================
     */
 
-    const result =
-      extractResult(fullText);
+    const finalHtml =
+      extract(
+        fullText,
+        "<WEB_HTML>",
+        "</WEB_HTML>"
+      )?.content || "";
+
+    const finalCss =
+      extract(
+        fullText,
+        "<WEB_CSS>",
+        "</WEB_CSS>"
+      )?.content || "";
+
+    const finalJs =
+      extract(
+        fullText,
+        "<WEB_JS>",
+        "</WEB_JS>"
+      )?.content || "";
+
+    const result = {
+      html: clean(
+        finalHtml
+      ).trim(),
+
+      css: clean(
+        finalCss
+      ).trim(),
+
+      js: clean(
+        finalJs
+      ).trim(),
+    };
 
     if (
       !result.html &&
@@ -793,38 +857,43 @@ Output exactly:
       !result.js
     ) {
       throw new Error(
-        "AI returned empty website code."
+        "AI returned an empty website."
       );
     }
 
-    sendEvent(res, "complete", {
-      success: true,
-      model: selectedModel,
-      html: result.html,
-      css: result.css,
-      js: result.js,
-    });
-
-    console.log(
-      `[AI] Generation completed using ${selectedModel}`
+    sendEvent(
+      res,
+      "complete",
+      {
+        success: true,
+        model:
+          selectedModel,
+        html:
+          result.html,
+        css:
+          result.css,
+        js:
+          result.js,
+      }
     );
 
     return res.end();
   } catch (error) {
     console.error(
-      "[AI] Streaming failed:",
+      "[AI] Streaming error",
       error
     );
 
-    if (!res.writableEnded) {
-      sendEvent(res, "error", {
+    sendEvent(
+      res,
+      "error",
+      {
         message:
           error?.message ||
           "Streaming generation failed.",
-        status: getStatus(error),
-      });
+      }
+    );
 
-      return res.end();
-    }
+    return res.end();
   }
 }
