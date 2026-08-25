@@ -94,6 +94,9 @@ function Builder() {
   const [generationError, setGenerationError] =
     useState("");
 
+  const [generationMode, setGenerationMode] =
+    useState("generate");
+
   const abortController =
     useRef(null);
 
@@ -537,7 +540,7 @@ function Builder() {
   ========================================================
   */
 
-  async function handleGenerate() {
+  async function handleGenerate(mode = "generate") {
     if (generating) {
       return;
     }
@@ -550,7 +553,14 @@ function Builder() {
       return;
     }
 
+    if (mode === "edit" && !htmlCode.trim() && !cssCode.trim() && !jsCode.trim()) {
+      alert("There is no existing website to edit yet. Generate a website first.");
+      return;
+    }
+
     setGenerating(true);
+
+    setGenerationMode(mode);
 
     setGenerationError("");
 
@@ -559,7 +569,9 @@ function Builder() {
     );
 
     setGenerationMessage(
-      "Understanding your idea..."
+      mode === "edit"
+        ? "Understanding your existing website..."
+        : "Understanding your idea..."
     );
 
     setGenerationModel("");
@@ -569,13 +581,16 @@ function Builder() {
     setActiveMode("code");
 
     /*
-    Clear current code so
-    streaming appears naturally.
+    A fresh generation starts with an empty editor.
+    An edit keeps the existing code visible while the
+    AI streams the updated version into the editor.
     */
 
-    setHtmlCode("");
-    setCssCode("");
-    setJsCode("");
+    if (mode === "generate") {
+      setHtmlCode("");
+      setCssCode("");
+      setJsCode("");
+    }
 
     abortController.current =
       new AbortController();
@@ -597,6 +612,8 @@ function Builder() {
 
             body: JSON.stringify({
               prompt,
+
+              mode,
 
               currentCode,
             }),
@@ -874,7 +891,9 @@ function Builder() {
                 );
 
                 setGenerationMessage(
-                  "Website generated successfully."
+                  mode === "edit"
+                    ? "Website updated successfully."
+                    : "Website generated successfully."
                 );
 
                 if (
@@ -1010,7 +1029,9 @@ function Builder() {
         );
 
         setGenerationMessage(
-          "Generation finished."
+          mode === "edit"
+            ? "Website update finished."
+            : "Generation finished."
         );
 
         setActiveMode(
@@ -1699,7 +1720,9 @@ ${jsCode}
             <span className="status-dot" />
 
             {generating
-              ? "Gemini Generating..."
+              ? generationMode === "edit"
+                ? "Gemini Editing..."
+                : "Gemini Generating..."
               : "Gemini Ready"}
 
           </div>
@@ -1714,27 +1737,44 @@ ${jsCode}
 
               markChanged();
             }}
-            placeholder="Describe what you want to build..."
+            placeholder={
+              generationMode === "edit"
+                ? "Describe the changes you want AI to make..."
+                : "Describe what you want to build..."
+            }
             disabled={
               generating
             }
           />
 
           {!generating ? (
-            <button
-              className="generate-button"
-              onClick={
-                handleGenerate
-              }
-            >
+            <>
+              <button
+                className="generate-button"
+                onClick={() =>
+                  handleGenerate("generate")
+                }
+              >
+                <span>✦</span>
+                Generate Website
+              </button>
 
-              <span>
-                ✦
-              </span>
-
-              Generate Website
-
-            </button>
+              <button
+                className="generate-button ai-edit-button"
+                onClick={() =>
+                  handleGenerate("edit")
+                }
+                disabled={
+                  !htmlCode.trim() &&
+                  !cssCode.trim() &&
+                  !jsCode.trim()
+                }
+                title="Edit the existing website with AI"
+              >
+                <span>✎</span>
+                Edit Existing Website
+              </button>
+            </>
           ) : (
             <button
               className="generate-button"
@@ -1742,13 +1782,8 @@ ${jsCode}
                 handleCancelGeneration
               }
             >
-
-              <span>
-                ■
-              </span>
-
+              <span>■</span>
               Stop Generation
-
             </button>
           )}
 
@@ -1810,8 +1845,10 @@ ${jsCode}
               </p>
 
               <button
-                onClick={
-                  handleGenerate
+                onClick={() =>
+                  handleGenerate(
+                    generationMode
+                  )
                 }
               >
                 Try Again

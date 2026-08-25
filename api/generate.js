@@ -376,6 +376,11 @@ export default async function handler(
 
   const body = req.body || {};
 
+  const mode =
+    body?.mode === "edit"
+      ? "edit"
+      : "generate";
+
   const prompt =
     typeof body.prompt === "string"
       ? body.prompt.trim()
@@ -405,7 +410,18 @@ export default async function handler(
 
   let existingContext = "";
 
-  if (hasExistingCode(existing)) {
+  const hasExisting =
+    hasExistingCode(existing);
+
+  if (mode === "edit" && !hasExisting) {
+    return res.status(400).json({
+      success: false,
+      error:
+        "There is no existing website to edit. Generate a website first.",
+    });
+  }
+
+  if (hasExisting) {
     existingContext = `
 ==================================================
 EXISTING WEBSITE
@@ -422,15 +438,17 @@ ${existing.js}
 
 ==================================================
 
-Modify the existing website intelligently.
+EDIT MODE: ${mode === "edit" ? "YES" : "NO"}
 
-Preserve useful functionality.
-
-Return the COMPLETE updated website.
+${mode === "edit"
+  ? "Treat the existing website as the source of truth. Apply the user's requested changes while preserving all unrelated working sections, interactions, layout structure, and functionality. Do not redesign or remove unrelated features. Return the COMPLETE updated website."
+  : "Use the existing website as context. Preserve useful functionality and structure unless the user's request requires changes. Return the COMPLETE updated website."}
 `;
   }
 
   const input = `
+TASK MODE: ${mode === "edit" ? "EDIT EXISTING WEBSITE" : "CREATE / GENERATE WEBSITE"}
+
 USER REQUEST:
 
 ${prompt}
