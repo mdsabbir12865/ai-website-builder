@@ -15,11 +15,9 @@ import { supabase } from "../lib/supabase";
 import JSZip from "jszip";
 
 function Builder() {
-  const { projectId } =
-    useParams();
+  const { projectId } = useParams();
 
-  const navigate =
-    useNavigate();
+  const navigate = useNavigate();
 
   /*
   ========================================================
@@ -152,12 +150,9 @@ function Builder() {
           await supabase.auth.getUser();
 
         if (!user) {
-          navigate(
-            "/login",
-            {
-              replace: true,
-            }
-          );
+          navigate("/login", {
+            replace: true,
+          });
 
           return;
         }
@@ -169,14 +164,8 @@ function Builder() {
           await supabase
             .from("projects")
             .select("*")
-            .eq(
-              "id",
-              projectId
-            )
-            .eq(
-              "user_id",
-              user.id
-            )
+            .eq("id", projectId)
+            .eq("user_id", user.id)
             .single();
 
         if (error) {
@@ -232,6 +221,7 @@ function Builder() {
         setLoading(false);
       } catch (error) {
         console.error(
+          "Project loading error:",
           error
         );
 
@@ -276,9 +266,7 @@ function Builder() {
   ========================================================
   */
 
-  function pushHistory(
-    nextState
-  ) {
+  function pushHistory(nextState) {
     setHistory(
       (previous) => {
         const trimmed =
@@ -461,7 +449,7 @@ function Builder() {
 
       alert(
         error?.message ||
-        "Save failed."
+          "Save failed."
       );
     } finally {
       setSaving(false);
@@ -470,7 +458,7 @@ function Builder() {
 
   /*
   ========================================================
-  STREAM PARSER
+  SSE PARSER
   ========================================================
   */
 
@@ -479,9 +467,7 @@ function Builder() {
     onEvent
   ) {
     const events =
-      buffer.split(
-        "\n\n"
-      );
+      buffer.split("\n\n");
 
     const remaining =
       events.pop() || "";
@@ -490,9 +476,7 @@ function Builder() {
       const eventBlock of events
     ) {
       const lines =
-        eventBlock.split(
-          "\n"
-        );
+        eventBlock.split("\n");
 
       let eventName =
         "message";
@@ -535,10 +519,11 @@ function Builder() {
           eventName,
           parsed
         );
-      } catch {
+      } catch (error) {
         console.warn(
           "Invalid SSE event:",
-          data
+          data,
+          error
         );
       }
     }
@@ -548,20 +533,16 @@ function Builder() {
 
   /*
   ========================================================
-  GENERATE
+  GENERATE WITH GEMINI
   ========================================================
   */
 
   async function handleGenerate() {
-    if (
-      generating
-    ) {
+    if (generating) {
       return;
     }
 
-    if (
-      !prompt.trim()
-    ) {
+    if (!prompt.trim()) {
       alert(
         "Please describe what you want to build."
       );
@@ -581,11 +562,11 @@ function Builder() {
       "Understanding your idea..."
     );
 
+    setGenerationModel("");
+
     setGenerationProgress(3);
 
-    setActiveMode(
-      "code"
-    );
+    setActiveMode("code");
 
     /*
     Clear current code so
@@ -627,6 +608,12 @@ function Builder() {
           }
         );
 
+      /*
+      ------------------------------------------
+      RESPONSE ERROR
+      ------------------------------------------
+      */
+
       if (!response.ok) {
         let message =
           "AI generation failed.";
@@ -645,9 +632,7 @@ function Builder() {
         );
       }
 
-      if (
-        !response.body
-      ) {
+      if (!response.body) {
         throw new Error(
           "Streaming is not supported by this response."
         );
@@ -664,15 +649,24 @@ function Builder() {
       let buffer = "";
 
       let streamedHTML = "";
+
       let streamedCSS = "";
+
       let streamedJS = "";
 
       let receivedComplete =
         false;
 
-      while (
-        true
-      ) {
+      let receivedError =
+        false;
+
+      /*
+      ======================================================
+      READ STREAM
+      ======================================================
+      */
+
+      while (true) {
         const {
           value,
           done,
@@ -707,8 +701,7 @@ function Builder() {
                 "status"
               ) {
                 setGenerationStage(
-                  data.stage ||
-                    ""
+                  data.stage || ""
                 );
 
                 setGenerationMessage(
@@ -732,6 +725,7 @@ function Builder() {
                   css: 65,
                   js: 85,
                   retrying: 10,
+                  complete: 100,
                 };
 
                 const progress =
@@ -740,7 +734,8 @@ function Builder() {
                   ];
 
                 if (
-                  progress
+                  progress !==
+                  undefined
                 ) {
                   setGenerationProgress(
                     progress
@@ -830,9 +825,7 @@ function Builder() {
                   );
                 }
 
-                setSaved(
-                  false
-                );
+                setSaved(false);
               }
 
               /*
@@ -848,19 +841,28 @@ function Builder() {
                 receivedComplete =
                   true;
 
-                setHtmlCode(
+                const finalHTML =
                   data.html ||
-                    streamedHTML
+                  streamedHTML;
+
+                const finalCSS =
+                  data.css ||
+                  streamedCSS;
+
+                const finalJS =
+                  data.js ||
+                  streamedJS;
+
+                setHtmlCode(
+                  finalHTML
                 );
 
                 setCssCode(
-                  data.css ||
-                    streamedCSS
+                  finalCSS
                 );
 
                 setJsCode(
-                  data.js ||
-                    streamedJS
+                  finalJS
                 );
 
                 setGenerationProgress(
@@ -883,36 +885,58 @@ function Builder() {
                   );
                 }
 
-                const finalState =
-                  {
-                    html:
-                      data.html ||
-                      streamedHTML,
+                const finalState = {
+                  html:
+                    finalHTML,
 
-                    css:
-                      data.css ||
-                      streamedCSS,
+                  css:
+                    finalCSS,
 
-                    js:
-                      data.js ||
-                      streamedJS,
-                  };
+                  js:
+                    finalJS,
+                };
+
+                /*
+                Add generated version
+                to history.
+                */
 
                 setHistory(
-                  (previous) => [
-                    ...previous,
-                    finalState,
-                  ].slice(-30)
+                  (previous) => {
+                    const current =
+                      previous[
+                        previous.length -
+                          1
+                      ];
+
+                    if (
+                      current &&
+                      current.html ===
+                        finalState.html &&
+                      current.css ===
+                        finalState.css &&
+                      current.js ===
+                        finalState.js
+                    ) {
+                      return previous;
+                    }
+
+                    return [
+                      ...previous,
+                      finalState,
+                    ].slice(-30);
+                  }
                 );
 
                 setHistoryIndex(
                   (previous) =>
-                    previous + 1
+                    Math.min(
+                      previous + 1,
+                      29
+                    )
                 );
 
-                setSaved(
-                  false
-                );
+                setSaved(false);
 
                 setPreviewKey(
                   (value) =>
@@ -934,59 +958,92 @@ function Builder() {
                 event ===
                 "error"
               ) {
+                receivedError =
+                  true;
+
                 setGenerationError(
                   data.message ||
                     "AI generation failed."
+                );
+
+                setGenerationStage(
+                  "error"
                 );
               }
             }
           );
       }
 
+      /*
+      ======================================================
+      FALLBACK IF STREAM CLOSED
+      ======================================================
+      */
+
       if (
         !receivedComplete &&
-        !generationError
-      ) {
-        /*
-        Sometimes the connection can
-        close immediately after the
-        final event.
-        */
-
-        if (
+        !receivedError &&
+        (
           streamedHTML ||
           streamedCSS ||
           streamedJS
-        ) {
-          setGenerationStage(
-            "complete"
-          );
+        )
+      ) {
+        setHtmlCode(
+          streamedHTML
+        );
 
-          setGenerationProgress(
-            100
-          );
+        setCssCode(
+          streamedCSS
+        );
 
-          setGenerationMessage(
-            "Generation finished."
-          );
+        setJsCode(
+          streamedJS
+        );
 
-          setActiveMode(
-            "preview"
-          );
-        }
+        setGenerationStage(
+          "complete"
+        );
+
+        setGenerationProgress(
+          100
+        );
+
+        setGenerationMessage(
+          "Generation finished."
+        );
+
+        setActiveMode(
+          "preview"
+        );
+
+        setSaved(false);
+
+        setPreviewKey(
+          (value) =>
+            value + 1
+        );
       }
     } catch (error) {
       if (
         error?.name ===
         "AbortError"
       ) {
+        setGenerationStage(
+          "cancelled"
+        );
+
         setGenerationMessage(
           "Generation cancelled."
         );
       } else {
         console.error(
-          "AI Generate Error:",
+          "Gemini Generate Error:",
           error
+        );
+
+        setGenerationStage(
+          "error"
         );
 
         setGenerationError(
@@ -995,9 +1052,7 @@ function Builder() {
         );
       }
     } finally {
-      setGenerating(
-        false
-      );
+      setGenerating(false);
 
       abortController.current =
         null;
@@ -1017,9 +1072,7 @@ function Builder() {
       abortController.current.abort();
     }
 
-    setGenerating(
-      false
-    );
+    setGenerating(false);
 
     setGenerationStage(
       "cancelled"
@@ -1032,7 +1085,7 @@ function Builder() {
 
   /*
   ========================================================
-  PREVIEW
+  PREVIEW DOCUMENT
   ========================================================
   */
 
@@ -1041,8 +1094,11 @@ function Builder() {
       () => `
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
+
 <meta
   name="viewport"
   content="width=device-width, initial-scale=1.0"
@@ -1064,6 +1120,7 @@ body {
 ${cssCode}
 
 </style>
+
 </head>
 
 <body>
@@ -1088,6 +1145,7 @@ console.error(
 <\/script>
 
 </body>
+
 </html>
 `,
       [
@@ -1113,12 +1171,28 @@ console.error(
       const html =
         `<!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${project.name || "My Website"}</title>
-<link rel="stylesheet" href="style.css">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
+
+<title>${
+          project.name ||
+          "My Website"
+        }</title>
+
+<link
+  rel="stylesheet"
+  href="style.css"
+>
+
 </head>
+
 <body>
 
 ${htmlCode}
@@ -1126,6 +1200,7 @@ ${htmlCode}
 <script src="script.js"></script>
 
 </body>
+
 </html>`;
 
       zip.file(
@@ -1144,11 +1219,9 @@ ${htmlCode}
       );
 
       const blob =
-        await zip.generateAsync(
-          {
-            type: "blob",
-          }
-        );
+        await zip.generateAsync({
+          type: "blob",
+        });
 
       const url =
         URL.createObjectURL(
@@ -1185,6 +1258,7 @@ ${htmlCode}
       );
     } catch (error) {
       console.error(
+        "ZIP export error:",
         error
       );
 
@@ -1208,11 +1282,26 @@ ${htmlCode}
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${project.name || "My Website"}</title>
-<link rel="stylesheet" href="style.css">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
+
+<title>${
+        project.name ||
+        "My Website"
+      }</title>
+
+<link
+  rel="stylesheet"
+  href="style.css"
+>
+
 </head>
 
 <body>
@@ -1222,6 +1311,7 @@ ${htmlCode}
 <script src="script.js"></script>
 
 </body>
+
 </html>
 
 
@@ -1288,6 +1378,7 @@ ${jsCode}
   if (loading) {
     return (
       <div className="builder-loading">
+
         <div className="builder-loader-orb">
           ✦
         </div>
@@ -1299,6 +1390,7 @@ ${jsCode}
         <p>
           Loading project
         </p>
+
       </div>
     );
   }
@@ -1312,6 +1404,7 @@ ${jsCode}
   if (!project) {
     return (
       <div className="builder-error">
+
         <div className="error-icon">
           !
         </div>
@@ -1334,6 +1427,7 @@ ${jsCode}
         >
           ← Back to Dashboard
         </button>
+
       </div>
     );
   }
@@ -1377,6 +1471,7 @@ ${jsCode}
             </div>
 
             <div>
+
               <strong>
                 WebAI
               </strong>
@@ -1384,6 +1479,7 @@ ${jsCode}
               <span>
                 BUILDER
               </span>
+
             </div>
 
           </div>
@@ -1403,6 +1499,8 @@ ${jsCode}
           </div>
 
         </div>
+
+        {/* CENTER MODE */}
 
         <div className="builder-center-controls">
 
@@ -1439,6 +1537,8 @@ ${jsCode}
           </button>
 
         </div>
+
+        {/* ACTIONS */}
 
         <div className="builder-actions">
 
@@ -1541,16 +1641,20 @@ ${jsCode}
 
           <button>
             ◆ GitHub
+
             <small>
               Coming soon
             </small>
+
           </button>
 
           <button>
             ▲ Vercel
+
             <small>
               Coming soon
             </small>
+
           </button>
 
         </div>
@@ -1571,6 +1675,7 @@ ${jsCode}
             </div>
 
             <div>
+
               <span>
                 AI ASSISTANT
               </span>
@@ -1578,6 +1683,7 @@ ${jsCode}
               <h2>
                 Build with AI
               </h2>
+
             </div>
 
           </div>
@@ -1593,8 +1699,8 @@ ${jsCode}
             <span className="status-dot" />
 
             {generating
-              ? "AI Generating..."
-              : "AI Ready"}
+              ? "Gemini Generating..."
+              : "Gemini Ready"}
 
           </div>
 
@@ -1621,11 +1727,13 @@ ${jsCode}
                 handleGenerate
               }
             >
+
               <span>
                 ✦
               </span>
 
               Generate Website
+
             </button>
           ) : (
             <button
@@ -1634,11 +1742,13 @@ ${jsCode}
                 handleCancelGeneration
               }
             >
+
               <span>
                 ■
               </span>
 
               Stop Generation
+
             </button>
           )}
 
@@ -1676,7 +1786,10 @@ ${jsCode}
               {generationModel && (
                 <small>
                   Powered by{" "}
-                  {generationModel}
+                  {generationModel ===
+                  "gemini-3-flash-preview"
+                    ? "Gemini 3 Flash"
+                    : generationModel}
                 </small>
               )}
 
@@ -1757,6 +1870,8 @@ ${jsCode}
 
           </div>
 
+          {/* TIP */}
+
           <div className="ai-tip">
 
             <span>
@@ -1798,7 +1913,7 @@ ${jsCode}
                 <span className="live-dot" />
 
                 {generating
-                  ? "AI Live Code"
+                  ? "Gemini Live Code"
                   : "Code Editor"}
 
               </div>
@@ -1991,7 +2106,7 @@ ${jsCode}
 
               <span>
                 {generating
-                  ? "● Live generation"
+                  ? "● Gemini live generation"
                   : "Auto Preview"}
               </span>
 
@@ -2192,6 +2307,7 @@ ${jsCode}
             <div className="setting-row">
 
               <div>
+
                 <strong>
                   Project Name
                 </strong>
@@ -2199,6 +2315,7 @@ ${jsCode}
                 <p>
                   {project.name}
                 </p>
+
               </div>
 
             </div>
@@ -2206,6 +2323,7 @@ ${jsCode}
             <div className="setting-row">
 
               <div>
+
                 <strong>
                   Project Type
                 </strong>
@@ -2214,6 +2332,7 @@ ${jsCode}
                   {project.type ||
                     "Website"}
                 </p>
+
               </div>
 
             </div>
@@ -2221,6 +2340,7 @@ ${jsCode}
             <div className="setting-row">
 
               <div>
+
                 <strong>
                   Project ID
                 </strong>
@@ -2228,6 +2348,7 @@ ${jsCode}
                 <p>
                   {projectId}
                 </p>
+
               </div>
 
             </div>

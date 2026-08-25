@@ -1,9 +1,7 @@
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 
-const MODELS = [
-  "gpt-5.6",
-  "gpt-5.5",
-];
+const MODEL =
+  "gemini-3-flash-preview";
 
 const MAX_PROMPT_LENGTH = 12000;
 const MAX_CODE_LENGTH = 70000;
@@ -13,6 +11,7 @@ const SYSTEM_PROMPT = `
 You are the core AI engine of a premium AI Website Builder.
 
 Act as:
+
 - Senior frontend engineer
 - UI/UX designer
 - Product designer
@@ -51,6 +50,7 @@ Never include explanations.
 HTML must ONLY contain body content.
 
 Never include:
+
 <html>
 <head>
 <body>
@@ -64,6 +64,7 @@ DESIGN
 Create a premium, modern and intentionally designed website.
 
 Use:
+
 - strong typography
 - spacing system
 - color system
@@ -204,7 +205,9 @@ function extract(
   const startIndex =
     text.indexOf(start);
 
-  if (startIndex === -1) {
+  if (
+    startIndex === -1
+  ) {
     return null;
   }
 
@@ -269,7 +272,7 @@ function sendEvent(
       )}\n\n`
     );
   } catch {
-    // client disconnected
+    // Client disconnected.
   }
 }
 
@@ -279,7 +282,8 @@ function existingCode(body) {
 
   return {
     html:
-      typeof code.html === "string"
+      typeof code.html ===
+      "string"
         ? code.html.slice(
             0,
             MAX_CODE_LENGTH
@@ -287,7 +291,8 @@ function existingCode(body) {
         : "",
 
     css:
-      typeof code.css === "string"
+      typeof code.css ===
+      "string"
         ? code.css.slice(
             0,
             MAX_CODE_LENGTH
@@ -295,7 +300,8 @@ function existingCode(body) {
         : "",
 
     js:
-      typeof code.js === "string"
+      typeof code.js ===
+      "string"
         ? code.js.slice(
             0,
             MAX_CODE_LENGTH
@@ -308,7 +314,9 @@ export default async function handler(
   req,
   res
 ) {
-  if (req.method !== "POST") {
+  if (
+    req.method !== "POST"
+  ) {
     return res.status(405).json({
       success: false,
       error:
@@ -317,13 +325,13 @@ export default async function handler(
   }
 
   const apiKey =
-    process.env.OPENAI_API_KEY;
+    process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
     return res.status(500).json({
       success: false,
       error:
-        "OPENAI_API_KEY is not configured.",
+        "GEMINI_API_KEY is not configured.",
     });
   }
 
@@ -331,7 +339,8 @@ export default async function handler(
     req.body || {};
 
   const prompt =
-    typeof body.prompt === "string"
+    typeof body.prompt ===
+    "string"
       ? body.prompt.trim()
       : "";
 
@@ -385,11 +394,14 @@ export default async function handler(
     existingCode(body);
 
   const hasExisting =
-    code.html ||
-    code.css ||
-    code.js;
+    Boolean(
+      code.html ||
+      code.css ||
+      code.js
+    );
 
-  let existingContext = "";
+  let existingContext =
+    "";
 
   if (hasExisting) {
     existingContext = `
@@ -422,8 +434,8 @@ ${prompt}
 ${existingContext}
 `;
 
-  const client =
-    new OpenAI({
+  const ai =
+    new GoogleGenAI({
       apiKey,
     });
 
@@ -432,107 +444,109 @@ ${existingContext}
     "status",
     {
       stage: "thinking",
+
       message:
         "Understanding your idea...",
     }
   );
 
   let stream = null;
-  let selectedModel = null;
+
   let lastError = null;
 
   /*
   ========================================================
-  CONNECT WITH MODEL
+  CONNECT WITH GEMINI
   ========================================================
   */
 
   for (
-    const model of MODELS
+    let attempt = 0;
+    attempt <= MAX_RETRIES;
+    attempt++
   ) {
-    for (
-      let attempt = 0;
-      attempt <= MAX_RETRIES;
-      attempt++
-    ) {
-      try {
-        if (attempt > 0) {
-          sendEvent(
-            res,
-            "status",
-            {
-              stage: "retrying",
-              message:
-                "Retrying AI connection...",
-              attempt,
-            }
-          );
-
-          await sleep(
-            Math.min(
-              1000 *
-                Math.pow(
-                  2,
-                  attempt - 1
-                ),
-              4000
-            )
-          );
-        }
-
+    try {
+      if (
+        attempt > 0
+      ) {
         sendEvent(
           res,
           "status",
           {
-            stage: "connecting",
+            stage:
+              "retrying",
+
             message:
-              "Connecting to AI...",
-            model,
+              "Retrying Gemini connection...",
+
+            attempt,
           }
         );
 
-        stream =
-          await client.responses.create({
-            model,
-
-            instructions:
-              SYSTEM_PROMPT,
-
-            input,
-
-            stream: true,
-
-            max_output_tokens:
-              30000,
-          });
-
-        selectedModel =
-          model;
-
-        console.log(
-          `[AI] Connected to ${model}`
+        await sleep(
+          Math.min(
+            1000 *
+              Math.pow(
+                2,
+                attempt - 1
+              ),
+            4000
+          )
         );
+      }
 
-        break;
-      } catch (error) {
-        lastError = error;
+      sendEvent(
+        res,
+        "status",
+        {
+          stage:
+            "connecting",
 
-        console.error(
-          `[AI] ${model} attempt ${
-            attempt + 1
-          } failed`,
-          error
-        );
+          message:
+            "Connecting to Gemini AI...",
 
-        if (
-          !shouldRetry(error)
-        ) {
-          break;
+          model: MODEL,
         }
+      );
+
+      stream =
+        await ai.models.generateContentStream(
+          {
+            model: MODEL,
+
+            contents: input,
+
+            config: {
+              systemInstruction:
+                SYSTEM_PROMPT,
+
+              maxOutputTokens:
+                30000,
+            },
+          }
+        );
+
+      console.log(
+        `[AI] Connected to ${MODEL}`
+      );
+
+      break;
+    } catch (error) {
+      lastError = error;
+
+      console.error(
+        `[AI] Gemini attempt ${
+          attempt + 1
+        } failed`,
+        error
+      );
+
+      if (
+        !shouldRetry(error)
+      ) {
+        break;
       }
     }
-
-    if (stream) break;
   }
 
   if (!stream) {
@@ -540,21 +554,25 @@ ${existingContext}
       statusOf(lastError);
 
     let message =
-      "AI generation failed.";
+      "Gemini generation failed.";
 
-    if (status === 429) {
+    if (
+      status === 429
+    ) {
       message =
-        "AI rate limit reached. Please wait a moment.";
+        "Gemini rate limit reached. Please wait a moment.";
     } else if (
       status === 502 ||
       status === 503 ||
       status === 504
     ) {
       message =
-        "AI service is temporarily busy. Please try again.";
-    } else if (status === 401) {
+        "Gemini service is temporarily busy. Please try again.";
+    } else if (
+      status === 401
+    ) {
       message =
-        "OpenAI API key is invalid.";
+        "Gemini API key is invalid.";
     }
 
     sendEvent(
@@ -578,7 +596,9 @@ ${existingContext}
   let fullText = "";
 
   let htmlSent = 0;
+
   let cssSent = 0;
+
   let jsSent = 0;
 
   let stage =
@@ -589,223 +609,240 @@ ${existingContext}
     "status",
     {
       stage,
+
       message:
-        "AI is generating your website...",
-      model: selectedModel,
+        "Gemini is generating your website...",
+
+      model: MODEL,
     }
   );
 
   try {
     for await (
-      const event of stream
+      const chunk of stream
     ) {
+      const delta =
+        chunk?.text || "";
+
+      if (!delta) {
+        continue;
+      }
+
+      fullText += delta;
+
       /*
       ------------------------------------------
-      TEXT DELTA
+      HTML
       ------------------------------------------
       */
 
+      const htmlPart =
+        extract(
+          fullText,
+          "<WEB_HTML>",
+          "</WEB_HTML>"
+        );
+
       if (
-        event.type ===
-        "response.output_text.delta"
+        htmlPart &&
+        htmlPart.content
       ) {
-        const delta =
-          event.delta || "";
-
-        if (!delta) continue;
-
-        fullText += delta;
-
-        /*
-        ----------------------------------------
-        HTML
-        ----------------------------------------
-        */
-
-        const htmlPart =
-          extract(
-            fullText,
-            "<WEB_HTML>",
-            "</WEB_HTML>"
+        const html =
+          clean(
+            htmlPart.content
           );
 
         if (
-          htmlPart &&
-          htmlPart.content
+          html.length >
+          htmlSent
         ) {
-          const html =
-            clean(
-              htmlPart.content
+          const newDelta =
+            html.slice(
+              htmlSent
             );
 
+          htmlSent =
+            html.length;
+
           if (
-            html.length >
-            htmlSent
+            stage !== "html"
           ) {
-            const newDelta =
-              html.slice(
-                htmlSent
-              );
-
-            htmlSent =
-              html.length;
-
-            if (
-              stage !== "html"
-            ) {
-              stage = "html";
-
-              sendEvent(
-                res,
-                "status",
-                {
-                  stage: "html",
-                  message:
-                    "Writing HTML...",
-                }
-              );
-            }
+            stage = "html";
 
             sendEvent(
               res,
-              "code",
+              "status",
               {
-                type: "html",
-                delta: newDelta,
-                value: html,
-                complete:
-                  htmlPart.complete,
+                stage:
+                  "html",
+
+                message:
+                  "Writing HTML...",
               }
             );
           }
+
+          sendEvent(
+            res,
+            "code",
+            {
+              type:
+                "html",
+
+              delta:
+                newDelta,
+
+              value:
+                html,
+
+              complete:
+                htmlPart.complete,
+            }
+          );
         }
+      }
 
-        /*
-        ----------------------------------------
-        CSS
-        ----------------------------------------
-        */
+      /*
+      ------------------------------------------
+      CSS
+      ------------------------------------------
+      */
 
-        const cssPart =
-          extract(
-            fullText,
-            "<WEB_CSS>",
-            "</WEB_CSS>"
+      const cssPart =
+        extract(
+          fullText,
+          "<WEB_CSS>",
+          "</WEB_CSS>"
+        );
+
+      if (
+        cssPart &&
+        cssPart.content
+      ) {
+        const css =
+          clean(
+            cssPart.content
           );
 
         if (
-          cssPart &&
-          cssPart.content
+          css.length >
+          cssSent
         ) {
-          const css =
-            clean(
-              cssPart.content
+          const newDelta =
+            css.slice(
+              cssSent
             );
 
+          cssSent =
+            css.length;
+
           if (
-            css.length >
-            cssSent
+            stage !== "css"
           ) {
-            const newDelta =
-              css.slice(
-                cssSent
-              );
-
-            cssSent =
-              css.length;
-
-            if (
-              stage !== "css"
-            ) {
-              stage = "css";
-
-              sendEvent(
-                res,
-                "status",
-                {
-                  stage: "css",
-                  message:
-                    "Designing CSS...",
-                }
-              );
-            }
+            stage = "css";
 
             sendEvent(
               res,
-              "code",
+              "status",
               {
-                type: "css",
-                delta: newDelta,
-                value: css,
-                complete:
-                  cssPart.complete,
+                stage:
+                  "css",
+
+                message:
+                  "Designing CSS...",
               }
             );
           }
+
+          sendEvent(
+            res,
+            "code",
+            {
+              type:
+                "css",
+
+              delta:
+                newDelta,
+
+              value:
+                css,
+
+              complete:
+                cssPart.complete,
+            }
+          );
         }
+      }
 
-        /*
-        ----------------------------------------
-        JAVASCRIPT
-        ----------------------------------------
-        */
+      /*
+      ------------------------------------------
+      JAVASCRIPT
+      ------------------------------------------
+      */
 
-        const jsPart =
-          extract(
-            fullText,
-            "<WEB_JS>",
-            "</WEB_JS>"
+      const jsPart =
+        extract(
+          fullText,
+          "<WEB_JS>",
+          "</WEB_JS>"
+        );
+
+      if (
+        jsPart &&
+        jsPart.content
+      ) {
+        const js =
+          clean(
+            jsPart.content
           );
 
         if (
-          jsPart &&
-          jsPart.content
+          js.length >
+          jsSent
         ) {
-          const js =
-            clean(
-              jsPart.content
+          const newDelta =
+            js.slice(
+              jsSent
             );
 
+          jsSent =
+            js.length;
+
           if (
-            js.length >
-            jsSent
+            stage !== "js"
           ) {
-            const newDelta =
-              js.slice(
-                jsSent
-              );
-
-            jsSent =
-              js.length;
-
-            if (
-              stage !== "js"
-            ) {
-              stage = "js";
-
-              sendEvent(
-                res,
-                "status",
-                {
-                  stage: "js",
-                  message:
-                    "Adding interactions...",
-                }
-              );
-            }
+            stage = "js";
 
             sendEvent(
               res,
-              "code",
+              "status",
               {
-                type: "js",
-                delta: newDelta,
-                value: js,
-                complete:
-                  jsPart.complete,
+                stage:
+                  "js",
+
+                message:
+                  "Adding interactions...",
               }
             );
           }
+
+          sendEvent(
+            res,
+            "code",
+            {
+              type:
+                "js",
+
+              delta:
+                newDelta,
+
+              value:
+                js,
+
+              complete:
+                jsPart.complete,
+            }
+          );
         }
       }
     }
@@ -838,17 +875,20 @@ ${existingContext}
       )?.content || "";
 
     const result = {
-      html: clean(
-        finalHtml
-      ).trim(),
+      html:
+        clean(
+          finalHtml
+        ).trim(),
 
-      css: clean(
-        finalCss
-      ).trim(),
+      css:
+        clean(
+          finalCss
+        ).trim(),
 
-      js: clean(
-        finalJs
-      ).trim(),
+      js:
+        clean(
+          finalJs
+        ).trim(),
     };
 
     if (
@@ -857,7 +897,7 @@ ${existingContext}
       !result.js
     ) {
       throw new Error(
-        "AI returned an empty website."
+        "Gemini returned an empty website."
       );
     }
 
@@ -866,12 +906,15 @@ ${existingContext}
       "complete",
       {
         success: true,
-        model:
-          selectedModel,
+
+        model: MODEL,
+
         html:
           result.html,
+
         css:
           result.css,
+
         js:
           result.js,
       }
@@ -880,7 +923,7 @@ ${existingContext}
     return res.end();
   } catch (error) {
     console.error(
-      "[AI] Streaming error",
+      "[AI] Gemini streaming error",
       error
     );
 
@@ -890,7 +933,7 @@ ${existingContext}
       {
         message:
           error?.message ||
-          "Streaming generation failed.",
+          "Gemini streaming generation failed.",
       }
     );
 

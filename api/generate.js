@@ -1,9 +1,6 @@
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 
-const MODELS = [
-  "gpt-5.6",
-  "gpt-5.5",
-];
+const MODEL = "gemini-3-flash-preview";
 
 const MAX_PROMPT_LENGTH = 12000;
 const MAX_CODE_LENGTH = 70000;
@@ -14,6 +11,7 @@ const SYSTEM_PROMPT = `
 You are the core AI engine of a premium AI Website Builder.
 
 You are simultaneously:
+
 - Senior frontend engineer
 - UI/UX designer
 - Product designer
@@ -52,6 +50,7 @@ No explanations.
 WEB_HTML must contain ONLY content inside <body>.
 
 Never include:
+
 <html>
 <head>
 <body>
@@ -65,6 +64,7 @@ DESIGN
 Create a professional, premium and intentionally designed interface.
 
 Use an appropriate visual system:
+
 - typography
 - spacing
 - colors
@@ -93,6 +93,7 @@ Tablet
 Mobile
 
 Use:
+
 - CSS Grid
 - Flexbox
 - fluid sizing
@@ -135,6 +136,7 @@ ACCESSIBILITY
 ==================================================
 
 Use:
+
 - semantic HTML
 - accessible buttons
 - aria attributes when appropriate
@@ -148,6 +150,7 @@ SEO
 ==================================================
 
 Use:
+
 - logical headings
 - semantic structure
 - meaningful content
@@ -185,6 +188,7 @@ SECURITY
 ==================================================
 
 Never generate:
+
 - API keys
 - passwords
 - secret credentials
@@ -214,7 +218,9 @@ Then return ONLY the three WEB sections.
 `;
 
 function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function clean(value = "") {
@@ -231,16 +237,24 @@ function clean(value = "") {
 function extract(text, start, end) {
   const startIndex = text.indexOf(start);
 
-  if (startIndex === -1) return "";
+  if (startIndex === -1) {
+    return "";
+  }
 
-  const contentStart = startIndex + start.length;
-  const endIndex = text.indexOf(end, contentStart);
+  const contentStart =
+    startIndex + start.length;
+
+  const endIndex =
+    text.indexOf(end, contentStart);
 
   if (endIndex === -1) {
     return text.slice(contentStart);
   }
 
-  return text.slice(contentStart, endIndex);
+  return text.slice(
+    contentStart,
+    endIndex
+  );
 }
 
 function getStatus(error) {
@@ -277,17 +291,26 @@ function getExistingCode(body) {
   return {
     html:
       typeof current.html === "string"
-        ? current.html.slice(0, MAX_CODE_LENGTH)
+        ? current.html.slice(
+            0,
+            MAX_CODE_LENGTH
+          )
         : "",
 
     css:
       typeof current.css === "string"
-        ? current.css.slice(0, MAX_CODE_LENGTH)
+        ? current.css.slice(
+            0,
+            MAX_CODE_LENGTH
+          )
         : "",
 
     js:
       typeof current.js === "string"
-        ? current.js.slice(0, MAX_CODE_LENGTH)
+        ? current.js.slice(
+            0,
+            MAX_CODE_LENGTH
+          )
         : "",
   };
 }
@@ -300,18 +323,24 @@ function hasExistingCode(code) {
   );
 }
 
-async function withTimeout(promise, ms) {
+async function withTimeout(
+  promise,
+  ms
+) {
   let timer;
 
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      reject(
-        new Error(
-          "OpenAI request timed out."
-        )
-      );
-    }, ms);
-  });
+  const timeout =
+    new Promise(
+      (_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new Error(
+              "Gemini request timed out."
+            )
+          );
+        }, ms);
+      }
+    );
 
   try {
     return await Promise.race([
@@ -323,7 +352,10 @@ async function withTimeout(promise, ms) {
   }
 }
 
-export default async function handler(req, res) {
+export default async function handler(
+  req,
+  res
+) {
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -332,13 +364,13 @@ export default async function handler(req, res) {
   }
 
   const apiKey =
-    process.env.OPENAI_API_KEY;
+    process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
     return res.status(500).json({
       success: false,
       error:
-        "OPENAI_API_KEY is not configured.",
+        "GEMINI_API_KEY is not configured.",
     });
   }
 
@@ -406,68 +438,68 @@ ${prompt}
 ${existingContext}
 `;
 
-  const client =
-    new OpenAI({
+  const ai =
+    new GoogleGenAI({
       apiKey,
     });
 
   let lastError = null;
 
   for (
-    const model of MODELS
+    let attempt = 0;
+    attempt <= MAX_RETRIES;
+    attempt++
   ) {
-    for (
-      let attempt = 0;
-      attempt <= MAX_RETRIES;
-      attempt++
-    ) {
-      try {
-        if (attempt > 0) {
-          await sleep(
-            Math.min(
-              1000 *
-                Math.pow(
-                  2,
-                  attempt - 1
-                ),
-              5000
-            )
-          );
-        }
-
-        console.log(
-          `[AI] ${model} attempt ${
-            attempt + 1
-          }`
+    try {
+      if (attempt > 0) {
+        await sleep(
+          Math.min(
+            1000 *
+              Math.pow(
+                2,
+                attempt - 1
+              ),
+            5000
+          )
         );
+      }
 
-        const response =
-          await withTimeout(
-            client.responses.create({
-              model,
+      console.log(
+        `[AI] ${MODEL} attempt ${
+          attempt + 1
+        }`
+      );
 
-              instructions:
+      const response =
+        await withTimeout(
+          ai.models.generateContent({
+            model: MODEL,
+
+            contents: input,
+
+            config: {
+              systemInstruction:
                 SYSTEM_PROMPT,
 
-              input,
-
-              max_output_tokens:
+              maxOutputTokens:
                 30000,
-            }),
+            },
+          }),
 
-            REQUEST_TIMEOUT
-          );
+          REQUEST_TIMEOUT
+        );
 
-        const text =
-          response.output_text || "";
+      const text =
+        response.text || "";
 
-        if (!text) {
-          throw new Error(
-            "OpenAI returned an empty response."
-          );
-        }
+      if (!text) {
+        throw new Error(
+          "Gemini returned an empty response."
+        );
+      }
 
-        const html = clean(
+      const html =
+        clean(
           extract(
             text,
             "<WEB_HTML>",
@@ -475,7 +507,8 @@ ${existingContext}
           )
         );
 
-        const css = clean(
+      const css =
+        clean(
           extract(
             text,
             "<WEB_CSS>",
@@ -483,7 +516,8 @@ ${existingContext}
           )
         );
 
-        const js = clean(
+      const js =
+        clean(
           extract(
             text,
             "<WEB_JS>",
@@ -491,40 +525,45 @@ ${existingContext}
           )
         );
 
-        if (
-          !html &&
-          !css &&
-          !js
-        ) {
-          throw new Error(
-            "OpenAI returned invalid website sections."
-          );
-        }
-
-        console.log(
-          `[AI] ${model} generation successful`
+      if (
+        !html &&
+        !css &&
+        !js
+      ) {
+        throw new Error(
+          "Gemini returned invalid website sections."
         );
+      }
 
-        return res.status(200).json({
-          success: true,
-          model,
-          html,
-          css,
-          js,
-        });
-      } catch (error) {
-        lastError = error;
+      console.log(
+        `[AI] ${MODEL} generation successful`
+      );
 
-        console.error(
-          `[AI] ${model} attempt ${
-            attempt + 1
-          } failed`,
-          error
-        );
+      return res.status(200).json({
+        success: true,
 
-        if (!retryable(error)) {
-          break;
-        }
+        model: MODEL,
+
+        html,
+
+        css,
+
+        js,
+      });
+    } catch (error) {
+      lastError = error;
+
+      console.error(
+        `[AI] ${MODEL} attempt ${
+          attempt + 1
+        } failed`,
+        error
+      );
+
+      if (
+        !retryable(error)
+      ) {
+        break;
       }
     }
   }
@@ -537,7 +576,7 @@ ${existingContext}
 
   if (status === 429) {
     message =
-      "AI rate limit reached. Please wait a moment and try again.";
+      "Gemini rate limit reached. Please wait a moment and try again.";
   }
 
   if (
@@ -546,12 +585,12 @@ ${existingContext}
     status === 504
   ) {
     message =
-      "AI service is temporarily busy. Please try again in a few seconds.";
+      "Gemini service is temporarily busy. Please try again in a few seconds.";
   }
 
   if (status === 401) {
     message =
-      "OpenAI API key is invalid or unavailable.";
+      "Gemini API key is invalid or unavailable.";
   }
 
   return res.status(
