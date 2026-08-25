@@ -112,6 +112,21 @@ function Builder() {
   const [saved, setSaved] =
     useState(true);
 
+  const [autoSaving, setAutoSaving] =
+    useState(false);
+
+  const autoSaveTimer =
+    useRef(null);
+
+  const historyTimer =
+    useRef(null);
+
+  const latestCodeRef =
+    useRef({ html: "", css: "", js: "" });
+
+  const isLoadedRef =
+    useRef(false);
+
   /*
   ========================================================
   HISTORY
@@ -220,6 +235,8 @@ function Builder() {
         ]);
 
         setHistoryIndex(0);
+        latestCodeRef.current = initialState;
+        isLoadedRef.current = true;
 
         setLoading(false);
       } catch (error) {
@@ -265,38 +282,145 @@ function Builder() {
 
   /*
   ========================================================
+  LIVE CODE REF
+  ========================================================
+  */
+
+  useEffect(() => {
+    latestCodeRef.current = currentCode;
+  }, [currentCode]);
+
+  /*
+  ========================================================
   HISTORY
   ========================================================
   */
 
   function pushHistory(nextState) {
-    setHistory(
-      (previous) => {
-        const trimmed =
-          previous.slice(
-            0,
-            historyIndex + 1
-          );
+    setHistory((previous) => {
+      const currentIndex = Math.max(
+        0,
+        Math.min(historyIndex, previous.length - 1)
+      );
 
-        return [
-          ...trimmed,
-          nextState,
-        ].slice(-30);
+      const current = previous[currentIndex];
+
+      if (
+        current &&
+        current.html === nextState.html &&
+        current.css === nextState.css &&
+        current.js === nextState.js
+      ) {
+        return previous;
       }
-    );
 
-    setHistoryIndex(
-      (previous) =>
-        Math.min(
-          previous + 1,
-          29
-        )
-    );
+      const trimmed = previous.slice(0, currentIndex + 1);
+      const nextHistory = [...trimmed, nextState].slice(-30);
+
+      setHistoryIndex(nextHistory.length - 1);
+      return nextHistory;
+    });
   }
 
   function markChanged() {
     setSaved(false);
   }
+
+  function handleManualCodeChange(type, value) {
+    const nextState = {
+      ...latestCodeRef.current,
+      [type]: value,
+    };
+
+    latestCodeRef.current = nextState;
+
+    if (type === "html") setHtmlCode(value);
+    if (type === "css") setCssCode(value);
+    if (type === "js") setJsCode(value);
+
+    setSaved(false);
+
+    if (historyTimer.current) {
+      clearTimeout(historyTimer.current);
+    }
+
+    historyTimer.current = setTimeout(() => {
+      pushHistory({ ...latestCodeRef.current });
+      historyTimer.current = null;
+    }, 450);
+  }
+
+  /*
+  ========================================================
+  AUTO SAVE
+  ========================================================
+  */
+
+  async function saveProjectData({ silent = false } = {}) {
+    if (!projectId || !isLoadedRef.current) return false;
+
+    if (!silent) setSaving(true);
+    else setAutoSaving(true);
+
+    try {
+      const { data: { user } } =
+        await supabase.auth.getUser();
+
+      if (!user) throw new Error("You are not logged in.");
+
+      const { error } = await supabase
+        .from("projects")
+        .update({
+          prompt,
+          html_code: latestCodeRef.current.html,
+          css_code: latestCodeRef.current.css,
+          js_code: latestCodeRef.current.js,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", projectId)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      setSaved(true);
+      return true;
+    } catch (error) {
+      console.error("Save error:", error);
+      if (!silent) {
+        alert(error?.message || "Save failed.");
+      }
+      return false;
+    } finally {
+      if (!silent) setSaving(false);
+      else setAutoSaving(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!projectId || !isLoadedRef.current || saved || generating) return;
+
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+    }
+
+    autoSaveTimer.current = setTimeout(() => {
+      saveProjectData({ silent: true });
+      autoSaveTimer.current = null;
+    }, 1800);
+
+    return () => {
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current);
+      }
+    };
+  }, [prompt, htmlCode, cssCode, jsCode, saved, generating, projectId]);
+
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+      if (historyTimer.current) clearTimeout(historyTimer.current);
+    };
+  }, []);
 
   /*
   ========================================================
@@ -305,6 +429,11 @@ function Builder() {
   */
 
   function handleUndo() {
+    if (historyTimer.current) {
+      clearTimeout(historyTimer.current);
+      historyTimer.current = null;
+    }
+
     if (
       historyIndex <= 0
     ) {
@@ -330,6 +459,8 @@ function Builder() {
       previous.js
     );
 
+    latestCodeRef.current = previous;
+
     setHistoryIndex(
       historyIndex - 1
     );
@@ -349,6 +480,11 @@ function Builder() {
   */
 
   function handleRedo() {
+    if (historyTimer.current) {
+      clearTimeout(historyTimer.current);
+      historyTimer.current = null;
+    }
+
     if (
       historyIndex >=
       history.length - 1
@@ -375,6 +511,8 @@ function Builder() {
       next.js
     );
 
+    latestCodeRef.current = next;
+
     setHistoryIndex(
       historyIndex + 1
     );
@@ -394,69 +532,12 @@ function Builder() {
   */
 
   async function handleSave() {
-    if (saving) return;
-
-    setSaving(true);
-
-    try {
-      const {
-        data: { user },
-      } =
-        await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error(
-          "You are not logged in."
-        );
-      }
-
-      const {
-        error,
-      } =
-        await supabase
-          .from("projects")
-          .update({
-            prompt,
-
-            html_code:
-              htmlCode,
-
-            css_code:
-              cssCode,
-
-            js_code:
-              jsCode,
-
-            updated_at:
-              new Date().toISOString(),
-          })
-          .eq(
-            "id",
-            projectId
-          )
-          .eq(
-            "user_id",
-            user.id
-          );
-
-      if (error) {
-        throw error;
-      }
-
-      setSaved(true);
-    } catch (error) {
-      console.error(
-        "Save error:",
-        error
-      );
-
-      alert(
-        error?.message ||
-          "Save failed."
-      );
-    } finally {
-      setSaving(false);
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
     }
+
+    await saveProjectData({ silent: false });
   }
 
   /*
@@ -586,10 +667,16 @@ function Builder() {
     AI streams the updated version into the editor.
     */
 
+    if (historyTimer.current) {
+      clearTimeout(historyTimer.current);
+      historyTimer.current = null;
+    }
+
     if (mode === "generate") {
       setHtmlCode("");
       setCssCode("");
       setJsCode("");
+      latestCodeRef.current = { html: "", css: "", js: "" };
     }
 
     abortController.current =
@@ -778,6 +865,8 @@ function Builder() {
                     data.value ||
                     streamedHTML;
 
+                  latestCodeRef.current = { ...latestCodeRef.current, html: streamedHTML };
+
                   setHtmlCode(
                     streamedHTML
                   );
@@ -802,6 +891,8 @@ function Builder() {
                     data.value ||
                     streamedCSS;
 
+                  latestCodeRef.current = { ...latestCodeRef.current, css: streamedCSS };
+
                   setCssCode(
                     streamedCSS
                   );
@@ -825,6 +916,8 @@ function Builder() {
                   streamedJS =
                     data.value ||
                     streamedJS;
+
+                  latestCodeRef.current = { ...latestCodeRef.current, js: streamedJS };
 
                   setJsCode(
                     streamedJS
@@ -881,6 +974,8 @@ function Builder() {
                 setJsCode(
                   finalJS
                 );
+
+                latestCodeRef.current = { html: finalHTML, css: finalCSS, js: finalJS };
 
                 setGenerationProgress(
                   100
@@ -1571,7 +1666,9 @@ ${jsCode}
             }
           >
             ●{" "}
-            {saved
+            {autoSaving
+              ? "Auto-saving..."
+              : saved
               ? "Saved"
               : "Unsaved"}
           </span>
@@ -2067,15 +2164,8 @@ ${jsCode}
                   value={
                     htmlCode
                   }
-                  onChange={(
-                    event
-                  ) => {
-                    setHtmlCode(
-                      event.target
-                        .value
-                    );
-
-                    markChanged();
+                  onChange={(event) => {
+                    handleManualCodeChange("html", event.target.value);
                   }}
                   spellCheck="false"
                 />
@@ -2088,15 +2178,8 @@ ${jsCode}
                   value={
                     cssCode
                   }
-                  onChange={(
-                    event
-                  ) => {
-                    setCssCode(
-                      event.target
-                        .value
-                    );
-
-                    markChanged();
+                  onChange={(event) => {
+                    handleManualCodeChange("css", event.target.value);
                   }}
                   spellCheck="false"
                 />
@@ -2109,15 +2192,8 @@ ${jsCode}
                   value={
                     jsCode
                   }
-                  onChange={(
-                    event
-                  ) => {
-                    setJsCode(
-                      event.target
-                        .value
-                    );
-
-                    markChanged();
+                  onChange={(event) => {
+                    handleManualCodeChange("js", event.target.value);
                   }}
                   spellCheck="false"
                 />
