@@ -1,3 +1,5 @@
+Builder.jsx
+
 import {
   useEffect,
   useMemo,
@@ -16,7 +18,6 @@ import JSZip from "jszip";
 
 function Builder() {
   const { projectId } = useParams();
-
   const navigate = useNavigate();
 
   /*
@@ -25,11 +26,8 @@ function Builder() {
   ========================================================
   */
 
-  const [project, setProject] =
-    useState(null);
-
-  const [loading, setLoading] =
-    useState(true);
+  const [project, setProject] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   /*
   ========================================================
@@ -37,17 +35,10 @@ function Builder() {
   ========================================================
   */
 
-  const [prompt, setPrompt] =
-    useState("");
-
-  const [htmlCode, setHtmlCode] =
-    useState("");
-
-  const [cssCode, setCssCode] =
-    useState("");
-
-  const [jsCode, setJsCode] =
-    useState("");
+  const [prompt, setPrompt] = useState("");
+  const [htmlCode, setHtmlCode] = useState("");
+  const [cssCode, setCssCode] = useState("");
+  const [jsCode, setJsCode] = useState("");
 
   /*
   ========================================================
@@ -55,20 +46,11 @@ function Builder() {
   ========================================================
   */
 
-  const [activeTab, setActiveTab] =
-    useState("html");
-
-  const [activeMode, setActiveMode] =
-    useState("code");
-
-  const [device, setDevice] =
-    useState("desktop");
-
-  const [fullscreen, setFullscreen] =
-    useState(false);
-
-  const [previewKey, setPreviewKey] =
-    useState(0);
+  const [activeTab, setActiveTab] = useState("html");
+  const [activeMode, setActiveMode] = useState("code");
+  const [device, setDevice] = useState("desktop");
+  const [fullscreen, setFullscreen] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
 
   /*
   ========================================================
@@ -76,29 +58,15 @@ function Builder() {
   ========================================================
   */
 
-  const [generating, setGenerating] =
-    useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generationStage, setGenerationStage] = useState("");
+  const [generationMessage, setGenerationMessage] = useState("");
+  const [generationModel, setGenerationModel] = useState("");
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationError, setGenerationError] = useState("");
+  const [generationMode, setGenerationMode] = useState("generate");
 
-  const [generationStage, setGenerationStage] =
-    useState("");
-
-  const [generationMessage, setGenerationMessage] =
-    useState("");
-
-  const [generationModel, setGenerationModel] =
-    useState("");
-
-  const [generationProgress, setGenerationProgress] =
-    useState(0);
-
-  const [generationError, setGenerationError] =
-    useState("");
-
-  const [generationMode, setGenerationMode] =
-    useState("generate");
-
-  const abortController =
-    useRef(null);
+  const abortController = useRef(null);
 
   /*
   ========================================================
@@ -106,26 +74,11 @@ function Builder() {
   ========================================================
   */
 
-  const [saving, setSaving] =
-    useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(true);
+  const [autoSaving, setAutoSaving] = useState(false);
 
-  const [saved, setSaved] =
-    useState(true);
-
-  const [autoSaving, setAutoSaving] =
-    useState(false);
-
-  const autoSaveTimer =
-    useRef(null);
-
-  const historyTimer =
-    useRef(null);
-
-  const latestCodeRef =
-    useRef({ html: "", css: "", js: "" });
-
-  const isLoadedRef =
-    useRef(false);
+  const autoSaveTimer = useRef(null);
 
   /*
   ========================================================
@@ -133,23 +86,30 @@ function Builder() {
   ========================================================
   */
 
-  const [history, setHistory] =
-    useState([]);
+  const [history, setHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
-  const [historyIndex, setHistoryIndex] =
-    useState(-1);
+  const historyTimer = useRef(null);
 
   /*
   ========================================================
-  OTHER UI
+  REFS
   ========================================================
   */
 
-  const [showSettings, setShowSettings] =
-    useState(false);
+  const latestCodeRef = useRef({
+    html: "",
+    css: "",
+    js: "",
+  });
 
-  const [showExport, setShowExport] =
-    useState(false);
+  const isLoadedRef = useRef(false);
+
+  const generationCodeRef = useRef({
+    html: "",
+    css: "",
+    js: "",
+  });
 
   /*
   ========================================================
@@ -164,8 +124,7 @@ function Builder() {
       try {
         const {
           data: { user },
-        } =
-          await supabase.auth.getUser();
+        } = await supabase.auth.getUser();
 
         if (!user) {
           navigate("/login", {
@@ -175,16 +134,12 @@ function Builder() {
           return;
         }
 
-        const {
-          data,
-          error,
-        } =
-          await supabase
-            .from("projects")
-            .select("*")
-            .eq("id", projectId)
-            .eq("user_id", user.id)
-            .single();
+        const { data, error } = await supabase
+          .from("projects")
+          .select("*")
+          .eq("id", projectId)
+          .eq("user_id", user.id)
+          .single();
 
         if (error) {
           console.error(
@@ -201,43 +156,28 @@ function Builder() {
 
         if (!mounted) return;
 
-        setProject(data);
-
-        setPrompt(
-          data.prompt || ""
-        );
-
-        setHtmlCode(
-          data.html_code || ""
-        );
-
-        setCssCode(
-          data.css_code || ""
-        );
-
-        setJsCode(
-          data.js_code || ""
-        );
-
         const initialState = {
-          html:
-            data.html_code || "",
-
-          css:
-            data.css_code || "",
-
-          js:
-            data.js_code || "",
+          html: data.html_code || "",
+          css: data.css_code || "",
+          js: data.js_code || "",
         };
 
-        setHistory([
-          initialState,
-        ]);
+        setProject(data);
 
+        setPrompt(data.prompt || "");
+
+        setHtmlCode(initialState.html);
+        setCssCode(initialState.css);
+        setJsCode(initialState.js);
+
+        setHistory([initialState]);
         setHistoryIndex(0);
+
         latestCodeRef.current = initialState;
+
         isLoadedRef.current = true;
 
+        setSaved(true);
         setLoading(false);
       } catch (error) {
         console.error(
@@ -256,10 +196,7 @@ function Builder() {
     return () => {
       mounted = false;
     };
-  }, [
-    projectId,
-    navigate,
-  ]);
+  }, [projectId, navigate]);
 
   /*
   ========================================================
@@ -273,16 +210,12 @@ function Builder() {
       css: cssCode,
       js: jsCode,
     }),
-    [
-      htmlCode,
-      cssCode,
-      jsCode,
-    ]
+    [htmlCode, cssCode, jsCode]
   );
 
   /*
   ========================================================
-  LIVE CODE REF
+  KEEP REF UPDATED
   ========================================================
   */
 
@@ -292,62 +225,192 @@ function Builder() {
 
   /*
   ========================================================
-  HISTORY
+  HISTORY HELPERS
   ========================================================
   */
 
-  function pushHistory(nextState) {
-    setHistory((previous) => {
-      const currentIndex = Math.max(
-        0,
-        Math.min(historyIndex, previous.length - 1)
-      );
+  function statesEqual(a, b) {
+    return (
+      a?.html === b?.html &&
+      a?.css === b?.css &&
+      a?.js === b?.js
+    );
+  }
 
-      const current = previous[currentIndex];
+  function addHistoryState(nextState) {
+    setHistory((previous) => {
+      const safeIndex =
+        historyIndex >= 0
+          ? Math.min(
+              historyIndex,
+              previous.length - 1
+            )
+          : previous.length - 1;
+
+      const current =
+        previous[safeIndex];
 
       if (
         current &&
-        current.html === nextState.html &&
-        current.css === nextState.css &&
-        current.js === nextState.js
+        statesEqual(
+          current,
+          nextState
+        )
       ) {
         return previous;
       }
 
-      const trimmed = previous.slice(0, currentIndex + 1);
-      const nextHistory = [...trimmed, nextState].slice(-30);
+      const base =
+        safeIndex >= 0
+          ? previous.slice(
+              0,
+              safeIndex + 1
+            )
+          : previous;
 
-      setHistoryIndex(nextHistory.length - 1);
-      return nextHistory;
+      const next = [
+        ...base,
+        { ...nextState },
+      ].slice(-30);
+
+      setHistoryIndex(
+        next.length - 1
+      );
+
+      return next;
     });
+  }
+
+  /*
+  ========================================================
+  MANUAL CODE CHANGE
+  ========================================================
+  */
+
+  function handleManualCodeChange(
+    type,
+    value
+  ) {
+    const nextState = {
+      ...latestCodeRef.current,
+      [type]: value,
+    };
+
+    latestCodeRef.current =
+      nextState;
+
+    if (type === "html") {
+      setHtmlCode(value);
+    }
+
+    if (type === "css") {
+      setCssCode(value);
+    }
+
+    if (type === "js") {
+      setJsCode(value);
+    }
+
+    setSaved(false);
+
+    if (historyTimer.current) {
+      clearTimeout(
+        historyTimer.current
+      );
+    }
+
+    historyTimer.current =
+      setTimeout(() => {
+        addHistoryState({
+          ...latestCodeRef.current,
+        });
+
+        historyTimer.current = null;
+      }, 450);
   }
 
   function markChanged() {
     setSaved(false);
   }
 
-  function handleManualCodeChange(type, value) {
-    const nextState = {
-      ...latestCodeRef.current,
-      [type]: value,
-    };
+  /*
+  ========================================================
+  SAVE
+  ========================================================
+  */
 
-    latestCodeRef.current = nextState;
-
-    if (type === "html") setHtmlCode(value);
-    if (type === "css") setCssCode(value);
-    if (type === "js") setJsCode(value);
-
-    setSaved(false);
-
-    if (historyTimer.current) {
-      clearTimeout(historyTimer.current);
+  async function saveProjectData({
+    silent = false,
+  } = {}) {
+    if (
+      !projectId ||
+      !isLoadedRef.current
+    ) {
+      return false;
     }
 
-    historyTimer.current = setTimeout(() => {
-      pushHistory({ ...latestCodeRef.current });
-      historyTimer.current = null;
-    }, 450);
+    if (!silent) {
+      setSaving(true);
+    } else {
+      setAutoSaving(true);
+    }
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error(
+          "You are not logged in."
+        );
+      }
+
+      const code =
+        latestCodeRef.current;
+
+      const { error } =
+        await supabase
+          .from("projects")
+          .update({
+            prompt,
+            html_code: code.html,
+            css_code: code.css,
+            js_code: code.js,
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq("id", projectId)
+          .eq("user_id", user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setSaved(true);
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Save error:",
+        error
+      );
+
+      if (!silent) {
+        alert(
+          error?.message ||
+            "Save failed."
+        );
+      }
+
+      return false;
+    } finally {
+      if (!silent) {
+        setSaving(false);
+      } else {
+        setAutoSaving(false);
+      }
+    }
   }
 
   /*
@@ -356,69 +419,74 @@ function Builder() {
   ========================================================
   */
 
-  async function saveProjectData({ silent = false } = {}) {
-    if (!projectId || !isLoadedRef.current) return false;
-
-    if (!silent) setSaving(true);
-    else setAutoSaving(true);
-
-    try {
-      const { data: { user } } =
-        await supabase.auth.getUser();
-
-      if (!user) throw new Error("You are not logged in.");
-
-      const { error } = await supabase
-        .from("projects")
-        .update({
-          prompt,
-          html_code: latestCodeRef.current.html,
-          css_code: latestCodeRef.current.css,
-          js_code: latestCodeRef.current.js,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", projectId)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
-
-      setSaved(true);
-      return true;
-    } catch (error) {
-      console.error("Save error:", error);
-      if (!silent) {
-        alert(error?.message || "Save failed.");
-      }
-      return false;
-    } finally {
-      if (!silent) setSaving(false);
-      else setAutoSaving(false);
-    }
-  }
-
   useEffect(() => {
-    if (!projectId || !isLoadedRef.current || saved || generating) return;
+    if (
+      !projectId ||
+      !isLoadedRef.current ||
+      saved ||
+      generating
+    ) {
+      return;
+    }
 
     if (autoSaveTimer.current) {
-      clearTimeout(autoSaveTimer.current);
+      clearTimeout(
+        autoSaveTimer.current
+      );
     }
 
-    autoSaveTimer.current = setTimeout(() => {
-      saveProjectData({ silent: true });
-      autoSaveTimer.current = null;
-    }, 1800);
+    autoSaveTimer.current =
+      setTimeout(() => {
+        saveProjectData({
+          silent: true,
+        });
+
+        autoSaveTimer.current =
+          null;
+      }, 1800);
 
     return () => {
       if (autoSaveTimer.current) {
-        clearTimeout(autoSaveTimer.current);
+        clearTimeout(
+          autoSaveTimer.current
+        );
       }
     };
-  }, [prompt, htmlCode, cssCode, jsCode, saved, generating, projectId]);
+  }, [
+    prompt,
+    htmlCode,
+    cssCode,
+    jsCode,
+    saved,
+    generating,
+    projectId,
+  ]);
+
+  /*
+  ========================================================
+  CLEANUP
+  ========================================================
+  */
 
   useEffect(() => {
     return () => {
-      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-      if (historyTimer.current) clearTimeout(historyTimer.current);
+      if (autoSaveTimer.current) {
+        clearTimeout(
+          autoSaveTimer.current
+        );
+      }
+
+      if (historyTimer.current) {
+        clearTimeout(
+          historyTimer.current
+        );
+      }
+
+      if (
+        abortController.current
+      ) {
+        abortController.current.abort();
+      }
     };
   }, []);
 
@@ -430,7 +498,10 @@ function Builder() {
 
   function handleUndo() {
     if (historyTimer.current) {
-      clearTimeout(historyTimer.current);
+      clearTimeout(
+        historyTimer.current
+      );
+
       historyTimer.current = null;
     }
 
@@ -447,19 +518,12 @@ function Builder() {
 
     if (!previous) return;
 
-    setHtmlCode(
-      previous.html
-    );
+    setHtmlCode(previous.html);
+    setCssCode(previous.css);
+    setJsCode(previous.js);
 
-    setCssCode(
-      previous.css
-    );
-
-    setJsCode(
-      previous.js
-    );
-
-    latestCodeRef.current = previous;
+    latestCodeRef.current =
+      { ...previous };
 
     setHistoryIndex(
       historyIndex - 1
@@ -468,8 +532,7 @@ function Builder() {
     setSaved(false);
 
     setPreviewKey(
-      (value) =>
-        value + 1
+      (value) => value + 1
     );
   }
 
@@ -481,7 +544,10 @@ function Builder() {
 
   function handleRedo() {
     if (historyTimer.current) {
-      clearTimeout(historyTimer.current);
+      clearTimeout(
+        historyTimer.current
+      );
+
       historyTimer.current = null;
     }
 
@@ -499,19 +565,12 @@ function Builder() {
 
     if (!next) return;
 
-    setHtmlCode(
-      next.html
-    );
+    setHtmlCode(next.html);
+    setCssCode(next.css);
+    setJsCode(next.js);
 
-    setCssCode(
-      next.css
-    );
-
-    setJsCode(
-      next.js
-    );
-
-    latestCodeRef.current = next;
+    latestCodeRef.current =
+      { ...next };
 
     setHistoryIndex(
       historyIndex + 1
@@ -520,24 +579,29 @@ function Builder() {
     setSaved(false);
 
     setPreviewKey(
-      (value) =>
-        value + 1
+      (value) => value + 1
     );
   }
 
   /*
   ========================================================
-  SAVE
+  SAVE BUTTON
   ========================================================
   */
 
   async function handleSave() {
     if (autoSaveTimer.current) {
-      clearTimeout(autoSaveTimer.current);
-      autoSaveTimer.current = null;
+      clearTimeout(
+        autoSaveTimer.current
+      );
+
+      autoSaveTimer.current =
+        null;
     }
 
-    await saveProjectData({ silent: false });
+    await saveProjectData({
+      silent: false,
+    });
   }
 
   /*
@@ -550,8 +614,16 @@ function Builder() {
     buffer,
     onEvent
   ) {
+    const normalized =
+      buffer.replace(
+        /\r\n/g,
+        "\n"
+      );
+
     const events =
-      buffer.split("\n\n");
+      normalized.split(
+        "\n\n"
+      );
 
     const remaining =
       events.pop() || "";
@@ -559,13 +631,21 @@ function Builder() {
     for (
       const eventBlock of events
     ) {
+      if (
+        !eventBlock.trim()
+      ) {
+        continue;
+      }
+
       const lines =
-        eventBlock.split("\n");
+        eventBlock.split(
+          "\n"
+        );
 
       let eventName =
         "message";
 
-      let data = "";
+      const dataLines = [];
 
       for (
         const line of lines
@@ -586,12 +666,16 @@ function Builder() {
             "data:"
           )
         ) {
-          data +=
+          dataLines.push(
             line
               .slice(5)
-              .trim();
+              .trimStart()
+          );
         }
       }
+
+      const data =
+        dataLines.join("\n");
 
       if (!data) continue;
 
@@ -617,16 +701,21 @@ function Builder() {
 
   /*
   ========================================================
-  GENERATE WITH GEMINI
+  GENERATE
   ========================================================
   */
 
-  async function handleGenerate(mode = "generate") {
+  async function handleGenerate(
+    mode = "generate"
+  ) {
     if (generating) {
       return;
     }
 
-    if (!prompt.trim()) {
+    const cleanPrompt =
+      prompt.trim();
+
+    if (!cleanPrompt) {
       alert(
         "Please describe what you want to build."
       );
@@ -634,15 +723,35 @@ function Builder() {
       return;
     }
 
-    if (mode === "edit" && !htmlCode.trim() && !cssCode.trim() && !jsCode.trim()) {
-      alert("There is no existing website to edit yet. Generate a website first.");
+    const existing =
+      latestCodeRef.current;
+
+    const hasExisting =
+      Boolean(
+        existing.html.trim() ||
+        existing.css.trim() ||
+        existing.js.trim()
+      );
+
+    if (
+      mode === "edit" &&
+      !hasExisting
+    ) {
+      alert(
+        "There is no existing website to edit yet. Generate a website first."
+      );
+
       return;
     }
 
+    /*
+    ------------------------------------------
+    RESET AI STATE
+    ------------------------------------------
+    */
+
     setGenerating(true);
-
     setGenerationMode(mode);
-
     setGenerationError("");
 
     setGenerationStage(
@@ -656,31 +765,93 @@ function Builder() {
     );
 
     setGenerationModel("");
-
     setGenerationProgress(3);
 
     setActiveMode("code");
 
     /*
-    A fresh generation starts with an empty editor.
-    An edit keeps the existing code visible while the
-    AI streams the updated version into the editor.
+    ------------------------------------------
+    STOP OLD TIMERS
+    ------------------------------------------
     */
 
     if (historyTimer.current) {
-      clearTimeout(historyTimer.current);
+      clearTimeout(
+        historyTimer.current
+      );
+
       historyTimer.current = null;
     }
 
+    /*
+    ------------------------------------------
+    IMPORTANT:
+    NEW GENERATION MUST NOT SEND
+    OLD WEBSITE AS CURRENT CODE.
+    ------------------------------------------
+    */
+
+    const requestCode =
+      mode === "edit"
+        ? {
+            html: existing.html,
+            css: existing.css,
+            js: existing.js,
+          }
+        : {
+            html: "",
+            css: "",
+            js: "",
+          };
+
+    /*
+    ------------------------------------------
+    GENERATE MODE STARTS CLEAN
+    ------------------------------------------
+    */
+
     if (mode === "generate") {
+      const emptyState = {
+        html: "",
+        css: "",
+        js: "",
+      };
+
+      generationCodeRef.current =
+        { ...emptyState };
+
+      latestCodeRef.current =
+        { ...emptyState };
+
       setHtmlCode("");
       setCssCode("");
       setJsCode("");
-      latestCodeRef.current = { html: "", css: "", js: "" };
+
+      setPreviewKey(
+        (value) => value + 1
+      );
+    } else {
+      generationCodeRef.current =
+        { ...requestCode };
     }
 
     abortController.current =
       new AbortController();
+
+    let receivedComplete =
+      false;
+
+    let receivedError =
+      false;
+
+    let streamedHTML =
+      requestCode.html || "";
+
+    let streamedCSS =
+      requestCode.css || "";
+
+    let streamedJS =
+      requestCode.js || "";
 
     try {
       const response =
@@ -698,11 +869,19 @@ function Builder() {
             },
 
             body: JSON.stringify({
-              prompt,
+              prompt:
+                cleanPrompt,
 
               mode,
 
-              currentCode,
+              /*
+              IMPORTANT:
+              generate = empty code
+              edit = existing code
+              */
+
+              currentCode:
+                requestCode,
             }),
 
             signal:
@@ -711,12 +890,6 @@ function Builder() {
                 .signal,
           }
         );
-
-      /*
-      ------------------------------------------
-      RESPONSE ERROR
-      ------------------------------------------
-      */
 
       if (!response.ok) {
         let message =
@@ -752,24 +925,6 @@ function Builder() {
 
       let buffer = "";
 
-      let streamedHTML = "";
-
-      let streamedCSS = "";
-
-      let streamedJS = "";
-
-      let receivedComplete =
-        false;
-
-      let receivedError =
-        false;
-
-      /*
-      ======================================================
-      READ STREAM
-      ======================================================
-      */
-
       while (true) {
         const {
           value,
@@ -777,7 +932,9 @@ function Builder() {
         } =
           await reader.read();
 
-        if (done) break;
+        if (done) {
+          break;
+        }
 
         buffer +=
           decoder.decode(
@@ -804,14 +961,21 @@ function Builder() {
                 event ===
                 "status"
               ) {
-                setGenerationStage(
-                  data.stage || ""
-                );
+                if (
+                  data.stage
+                ) {
+                  setGenerationStage(
+                    data.stage
+                  );
+                }
 
-                setGenerationMessage(
-                  data.message ||
-                    "Generating..."
-                );
+                if (
+                  data.message
+                ) {
+                  setGenerationMessage(
+                    data.message
+                  );
+                }
 
                 if (
                   data.model
@@ -832,17 +996,16 @@ function Builder() {
                   complete: 100,
                 };
 
-                const progress =
+                if (
                   progressMap[
                     data.stage
-                  ];
-
-                if (
-                  progress !==
+                  ] !==
                   undefined
                 ) {
                   setGenerationProgress(
-                    progress
+                    progressMap[
+                      data.stage
+                    ]
                   );
                 }
               }
@@ -862,10 +1025,16 @@ function Builder() {
                   "html"
                 ) {
                   streamedHTML =
-                    data.value ||
+                    typeof data.value ===
+                    "string"
+                      ? data.value
+                      : streamedHTML;
+
+                  generationCodeRef.current.html =
                     streamedHTML;
 
-                  latestCodeRef.current = { ...latestCodeRef.current, html: streamedHTML };
+                  latestCodeRef.current.html =
+                    streamedHTML;
 
                   setHtmlCode(
                     streamedHTML
@@ -874,11 +1043,14 @@ function Builder() {
                   setGenerationProgress(
                     Math.min(
                       60,
-                      15 +
-                        Math.floor(
-                          streamedHTML.length /
-                            150
-                        )
+                      Math.max(
+                        20,
+                        15 +
+                          Math.floor(
+                            streamedHTML.length /
+                              150
+                          )
+                      )
                     )
                   );
                 }
@@ -888,10 +1060,16 @@ function Builder() {
                   "css"
                 ) {
                   streamedCSS =
-                    data.value ||
+                    typeof data.value ===
+                    "string"
+                      ? data.value
+                      : streamedCSS;
+
+                  generationCodeRef.current.css =
                     streamedCSS;
 
-                  latestCodeRef.current = { ...latestCodeRef.current, css: streamedCSS };
+                  latestCodeRef.current.css =
+                    streamedCSS;
 
                   setCssCode(
                     streamedCSS
@@ -900,11 +1078,14 @@ function Builder() {
                   setGenerationProgress(
                     Math.min(
                       85,
-                      55 +
-                        Math.floor(
-                          streamedCSS.length /
-                            200
-                        )
+                      Math.max(
+                        55,
+                        55 +
+                          Math.floor(
+                            streamedCSS.length /
+                              200
+                          )
+                      )
                     )
                   );
                 }
@@ -914,10 +1095,16 @@ function Builder() {
                   "js"
                 ) {
                   streamedJS =
-                    data.value ||
+                    typeof data.value ===
+                    "string"
+                      ? data.value
+                      : streamedJS;
+
+                  generationCodeRef.current.js =
                     streamedJS;
 
-                  latestCodeRef.current = { ...latestCodeRef.current, js: streamedJS };
+                  latestCodeRef.current.js =
+                    streamedJS;
 
                   setJsCode(
                     streamedJS
@@ -926,11 +1113,14 @@ function Builder() {
                   setGenerationProgress(
                     Math.min(
                       98,
-                      80 +
-                        Math.floor(
-                          streamedJS.length /
-                            300
-                        )
+                      Math.max(
+                        80,
+                        80 +
+                          Math.floor(
+                            streamedJS.length /
+                              300
+                          )
+                      )
                     )
                   );
                 }
@@ -952,16 +1142,39 @@ function Builder() {
                   true;
 
                 const finalHTML =
-                  data.html ||
-                  streamedHTML;
+                  typeof data.html ===
+                  "string"
+                    ? data.html
+                    : streamedHTML;
 
                 const finalCSS =
-                  data.css ||
-                  streamedCSS;
+                  typeof data.css ===
+                  "string"
+                    ? data.css
+                    : streamedCSS;
 
                 const finalJS =
-                  data.js ||
-                  streamedJS;
+                  typeof data.js ===
+                  "string"
+                    ? data.js
+                    : streamedJS;
+
+                const finalState = {
+                  html:
+                    finalHTML,
+
+                  css:
+                    finalCSS,
+
+                  js:
+                    finalJS,
+                };
+
+                generationCodeRef.current =
+                  { ...finalState };
+
+                latestCodeRef.current =
+                  { ...finalState };
 
                 setHtmlCode(
                   finalHTML
@@ -974,8 +1187,6 @@ function Builder() {
                 setJsCode(
                   finalJS
                 );
-
-                latestCodeRef.current = { html: finalHTML, css: finalCSS, js: finalJS };
 
                 setGenerationProgress(
                   100
@@ -999,20 +1210,10 @@ function Builder() {
                   );
                 }
 
-                const finalState = {
-                  html:
-                    finalHTML,
-
-                  css:
-                    finalCSS,
-
-                  js:
-                    finalJS,
-                };
-
                 /*
-                Add generated version
-                to history.
+                --------------------------------
+                ADD FINAL VERSION TO HISTORY
+                --------------------------------
                 */
 
                 setHistory(
@@ -1025,29 +1226,26 @@ function Builder() {
 
                     if (
                       current &&
-                      current.html ===
-                        finalState.html &&
-                      current.css ===
-                        finalState.css &&
-                      current.js ===
-                        finalState.js
+                      statesEqual(
+                        current,
+                        finalState
+                      )
                     ) {
                       return previous;
                     }
 
-                    return [
-                      ...previous,
-                      finalState,
-                    ].slice(-30);
-                  }
-                );
+                    const next =
+                      [
+                        ...previous,
+                        finalState,
+                      ].slice(-30);
 
-                setHistoryIndex(
-                  (previous) =>
-                    Math.min(
-                      previous + 1,
-                      29
-                    )
+                    setHistoryIndex(
+                      next.length - 1
+                    );
+
+                    return next;
+                  }
                 );
 
                 setSaved(false);
@@ -1083,74 +1281,174 @@ function Builder() {
                 setGenerationStage(
                   "error"
                 );
+
+                setGenerationMessage(
+                  "Generation failed."
+                );
               }
             }
           );
+        }
       }
 
       /*
-      ======================================================
-      FALLBACK IF STREAM CLOSED
-      ======================================================
+      ------------------------------------------
+      STREAM CLOSED WITHOUT COMPLETE EVENT
+      ------------------------------------------
       */
 
       if (
         !receivedComplete &&
-        !receivedError &&
-        (
-          streamedHTML ||
-          streamedCSS ||
-          streamedJS
-        )
+        !receivedError
       ) {
-        setHtmlCode(
-          streamedHTML
-        );
+        const hasPartial =
+          Boolean(
+            streamedHTML ||
+            streamedCSS ||
+            streamedJS
+          );
 
-        setCssCode(
-          streamedCSS
-        );
+        if (hasPartial) {
+          const partialState = {
+            html:
+              streamedHTML,
 
-        setJsCode(
-          streamedJS
-        );
+            css:
+              streamedCSS,
 
-        setGenerationStage(
-          "complete"
-        );
+            js:
+              streamedJS,
+          };
 
-        setGenerationProgress(
-          100
-        );
+          latestCodeRef.current =
+            { ...partialState };
 
-        setGenerationMessage(
-          mode === "edit"
-            ? "Website update finished."
-            : "Generation finished."
-        );
+          setHtmlCode(
+            partialState.html
+          );
 
-        setActiveMode(
-          "preview"
-        );
+          setCssCode(
+            partialState.css
+          );
 
-        setSaved(false);
+          setJsCode(
+            partialState.js
+          );
 
-        setPreviewKey(
-          (value) =>
-            value + 1
-        );
+          setHistory(
+            (previous) => {
+              const current =
+                previous[
+                  previous.length -
+                    1
+                ];
+
+              if (
+                current &&
+                statesEqual(
+                  current,
+                  partialState
+                )
+              ) {
+                return previous;
+              }
+
+              const next =
+                [
+                  ...previous,
+                  partialState,
+                ].slice(-30);
+
+              setHistoryIndex(
+                next.length - 1
+              );
+
+              return next;
+            }
+          );
+
+          setGenerationStage(
+            "complete"
+          );
+
+          setGenerationProgress(
+            100
+          );
+
+          setGenerationMessage(
+            mode === "edit"
+              ? "Website update finished."
+              : "Generation finished."
+          );
+
+          setSaved(false);
+
+          setPreviewKey(
+            (value) =>
+              value + 1
+          );
+
+          setActiveMode(
+            "preview"
+          );
+        }
       }
     } catch (error) {
       if (
         error?.name ===
         "AbortError"
       ) {
+        /*
+        Keep whatever code was
+        already generated.
+        */
+
+        const partial =
+          generationCodeRef.current;
+
+        latestCodeRef.current =
+          { ...partial };
+
+        setHtmlCode(
+          partial.html
+        );
+
+        setCssCode(
+          partial.css
+        );
+
+        setJsCode(
+          partial.js
+        );
+
+        const hasPartial =
+          Boolean(
+            partial.html ||
+            partial.css ||
+            partial.js
+          );
+
+        if (hasPartial) {
+          addHistoryState(
+            { ...partial }
+          );
+
+          setSaved(false);
+
+          setPreviewKey(
+            (value) =>
+              value + 1
+          );
+        }
+
         setGenerationStage(
           "cancelled"
         );
 
         setGenerationMessage(
-          "Generation cancelled."
+          hasPartial
+            ? "Generation stopped. Partial code has been kept."
+            : "Generation cancelled."
         );
       } else {
         console.error(
@@ -1160,6 +1458,10 @@ function Builder() {
 
         setGenerationStage(
           "error"
+        );
+
+        setGenerationMessage(
+          "Generation failed."
         );
 
         setGenerationError(
@@ -1186,17 +1488,17 @@ function Builder() {
       abortController.current
     ) {
       abortController.current.abort();
+    } else {
+      setGenerating(false);
+
+      setGenerationStage(
+        "cancelled"
+      );
+
+      setGenerationMessage(
+        "Generation cancelled."
+      );
     }
-
-    setGenerating(false);
-
-    setGenerationStage(
-      "cancelled"
-    );
-
-    setGenerationMessage(
-      "Generation cancelled."
-    );
   }
 
   /*
@@ -1281,8 +1583,7 @@ console.error(
     if (!project) return;
 
     try {
-      const zip =
-        new JSZip();
+      const zip = new JSZip();
 
       const html =
         `<!DOCTYPE html>
@@ -1365,13 +1666,11 @@ ${htmlCode}
 
       link.remove();
 
-      setTimeout(
-        () =>
-          URL.revokeObjectURL(
-            url
-          ),
-        1000
-      );
+      setTimeout(() => {
+        URL.revokeObjectURL(
+          url
+        );
+      }, 1000);
     } catch (error) {
       console.error(
         "ZIP export error:",
@@ -1476,13 +1775,11 @@ ${jsCode}
 
     link.remove();
 
-    setTimeout(
-      () =>
-        URL.revokeObjectURL(
-          url
-        ),
-      1000
-    );
+    setTimeout(() => {
+      URL.revokeObjectURL(
+        url
+      );
+    }, 1000);
   }
 
   /*
@@ -1817,7 +2114,8 @@ ${jsCode}
             <span className="status-dot" />
 
             {generating
-              ? generationMode === "edit"
+              ? generationMode ===
+                "edit"
                 ? "Gemini Editing..."
                 : "Gemini Generating..."
               : "Gemini Ready"}
@@ -1835,7 +2133,8 @@ ${jsCode}
               markChanged();
             }}
             placeholder={
-              generationMode === "edit"
+              generationMode ===
+              "edit"
                 ? "Describe the changes you want AI to make..."
                 : "Describe what you want to build..."
             }
@@ -1849,7 +2148,9 @@ ${jsCode}
               <button
                 className="generate-button"
                 onClick={() =>
-                  handleGenerate("generate")
+                  handleGenerate(
+                    "generate"
+                  )
                 }
               >
                 <span>✦</span>
@@ -1859,7 +2160,9 @@ ${jsCode}
               <button
                 className="generate-button ai-edit-button"
                 onClick={() =>
-                  handleGenerate("edit")
+                  handleGenerate(
+                    "edit"
+                  )
                 }
                 disabled={
                   !htmlCode.trim() &&
@@ -2164,9 +2467,12 @@ ${jsCode}
                   value={
                     htmlCode
                   }
-                  onChange={(event) => {
-                    handleManualCodeChange("html", event.target.value);
-                  }}
+                  onChange={(event) =>
+                    handleManualCodeChange(
+                      "html",
+                      event.target.value
+                    )
+                  }
                   spellCheck="false"
                 />
               )}
@@ -2178,9 +2484,12 @@ ${jsCode}
                   value={
                     cssCode
                   }
-                  onChange={(event) => {
-                    handleManualCodeChange("css", event.target.value);
-                  }}
+                  onChange={(event) =>
+                    handleManualCodeChange(
+                      "css",
+                      event.target.value
+                    )
+                  }
                   spellCheck="false"
                 />
               )}
@@ -2192,9 +2501,12 @@ ${jsCode}
                   value={
                     jsCode
                   }
-                  onChange={(event) => {
-                    handleManualCodeChange("js", event.target.value);
-                  }}
+                  onChange={(event) =>
+                    handleManualCodeChange(
+                      "js",
+                      event.target.value
+                    )
+                  }
                   spellCheck="false"
                 />
               )}
@@ -2384,9 +2696,7 @@ ${jsCode}
 
           <div
             className="settings-panel"
-            onClick={(
-              event
-            ) =>
+            onClick={(event) =>
               event.stopPropagation()
             }
           >
