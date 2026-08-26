@@ -1,31 +1,53 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+
 import { supabase } from "../lib/supabase";
 import "../App.css";
 
 function Dashboard() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const [projects, setProjects] = useState([]);
-  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsLoading, setProjectsLoading] =
+    useState(true);
 
   const [showCreateProject, setShowCreateProject] =
     useState(false);
 
-  const [projectName, setProjectName] = useState("");
-  const [projectType, setProjectType] = useState("Business");
-  const [projectPrompt, setProjectPrompt] = useState("");
+  const [projectName, setProjectName] =
+    useState("");
+
+  const [projectType, setProjectType] =
+    useState("Business");
+
+  const [projectPrompt, setProjectPrompt] =
+    useState("");
 
   // Project Management
-  const [searchQuery, setSearchQuery] = useState("");
-  const [actionLoading, setActionLoading] = useState(null);
+  const [searchQuery, setSearchQuery] =
+    useState("");
+
+  const [actionLoading, setActionLoading] =
+    useState(null);
 
   // Rename
-  const [renameProject, setRenameProject] = useState(null);
-  const [renameValue, setRenameValue] = useState("");
+  const [renameProject, setRenameProject] =
+    useState(null);
 
-  const navigate = useNavigate();
+  const [renameValue, setRenameValue] =
+    useState("");
 
   /*
   ========================================================
@@ -95,6 +117,41 @@ function Dashboard() {
     setProjects(data || []);
     setProjectsLoading(false);
   }
+
+  /*
+  ========================================================
+  TEMPLATE SYSTEM
+  ========================================================
+  */
+
+  useEffect(() => {
+    const template = location.state?.template;
+
+    if (!template) return;
+
+    setProjectName(
+      `${template.name} Project`
+    );
+
+    setProjectType(
+      template.category || "Business"
+    );
+
+    setProjectPrompt(
+      template.prompt || ""
+    );
+
+    setShowCreateProject(true);
+
+    /*
+    Clear navigation state so refreshing
+    the dashboard does not open the modal again.
+    */
+    navigate("/dashboard", {
+      replace: true,
+      state: {},
+    });
+  }, [location.state, navigate]);
 
   /*
   ========================================================
@@ -175,8 +232,15 @@ function Dashboard() {
     setProjectName("");
     setProjectType("Business");
     setProjectPrompt("");
+
     setShowCreateProject(false);
     setActionLoading(null);
+
+    /*
+    Open the newly created project
+    directly in Builder.
+    */
+    navigate(`/builder/${data.id}`);
   }
 
   /*
@@ -186,10 +250,9 @@ function Dashboard() {
   */
 
   const filteredProjects = useMemo(() => {
-    const query =
-      searchQuery
-        .trim()
-        .toLowerCase();
+    const query = searchQuery
+      .trim()
+      .toLowerCase();
 
     if (!query) {
       return projects;
@@ -237,14 +300,8 @@ function Dashboard() {
     } = await supabase
       .from("projects")
       .delete()
-      .eq(
-        "id",
-        project.id
-      )
-      .eq(
-        "user_id",
-        user.id
-      );
+      .eq("id", project.id)
+      .eq("user_id", user.id);
 
     if (error) {
       console.error(
@@ -261,13 +318,11 @@ function Dashboard() {
       return;
     }
 
-    setProjects(
-      (previous) =>
-        previous.filter(
-          (item) =>
-            item.id !==
-            project.id
-        )
+    setProjects((previous) =>
+      previous.filter(
+        (item) =>
+          item.id !== project.id
+      )
     );
 
     setActionLoading(null);
@@ -281,6 +336,7 @@ function Dashboard() {
 
   function openRenameModal(project) {
     setRenameProject(project);
+
     setRenameValue(
       project.name || ""
     );
@@ -347,24 +403,21 @@ function Dashboard() {
       return;
     }
 
-    setProjects(
-      (previous) =>
-        previous.map(
-          (item) =>
-            item.id ===
-            renameProject.id
-              ? {
-                  ...item,
-                  name:
-                    data.name,
-                  updated_at:
-                    data.updated_at,
-                }
-              : item
-        )
+    setProjects((previous) =>
+      previous.map((item) =>
+        item.id === renameProject.id
+          ? {
+              ...item,
+              name: data.name,
+              updated_at:
+                data.updated_at,
+            }
+          : item
+      )
     );
 
     closeRenameModal();
+
     setActionLoading(null);
   }
 
@@ -374,7 +427,9 @@ function Dashboard() {
   ========================================================
   */
 
-  async function handleDuplicateProject(project) {
+  async function handleDuplicateProject(
+    project
+  ) {
     if (!user) return;
 
     setActionLoading(
@@ -389,29 +444,13 @@ function Dashboard() {
       .insert([
         {
           user_id: user.id,
-
           name:
             `${project.name} Copy`,
-
           type:
             project.type ||
             "Business",
-
           prompt:
-            project.prompt ||
-            "",
-
-          html_code:
-            project.html_code ||
-            "",
-
-          css_code:
-            project.css_code ||
-            "",
-
-          js_code:
-            project.js_code ||
-            "",
+            project.prompt || "",
         },
       ])
       .select()
@@ -432,14 +471,26 @@ function Dashboard() {
       return;
     }
 
-    setProjects(
-      (previous) => [
-        data,
-        ...previous,
-      ]
-    );
+    setProjects((previous) => [
+      data,
+      ...previous,
+    ]);
 
     setActionLoading(null);
+  }
+
+  /*
+  ========================================================
+  CLOSE CREATE MODAL
+  ========================================================
+  */
+
+  function closeCreateModal() {
+    setShowCreateProject(false);
+
+    setProjectName("");
+    setProjectType("Business");
+    setProjectPrompt("");
   }
 
   /*
@@ -523,10 +574,14 @@ function Dashboard() {
           </a>
 
           <a
-            href="#"
-            onClick={(e) =>
-              e.preventDefault()
-            }
+            href="/templates"
+            onClick={(e) => {
+              e.preventDefault();
+
+              navigate(
+                "/templates"
+              );
+            }}
           >
             <span>▣</span>
             Templates
@@ -635,9 +690,7 @@ function Dashboard() {
           <button
             className="create-project-btn"
             onClick={() =>
-              setShowCreateProject(
-                true
-              )
+              setShowCreateProject(true)
             }
           >
             + Create New Project
@@ -734,6 +787,7 @@ function Dashboard() {
 
           {!projectsLoading &&
             projects.length > 0 && (
+
               <div className="projects-toolbar">
 
                 <div className="project-search">
@@ -771,19 +825,25 @@ function Dashboard() {
                 </div>
 
                 <span className="project-count">
-                  {filteredProjects.length}{" "}
-                  {filteredProjects.length ===
-                  1
-                    ? "project"
-                    : "projects"}
+                  {
+                    filteredProjects.length
+                  }{" "}
+                  {
+                    filteredProjects.length ===
+                    1
+                      ? "project"
+                      : "projects"
+                  }
                 </span>
 
               </div>
+
             )}
 
           {/* LOADING */}
 
           {projectsLoading ? (
+
             <div className="empty-projects">
 
               <div className="empty-icon">
@@ -800,9 +860,8 @@ function Dashboard() {
               </p>
 
             </div>
-          ) : projects.length === 0 ? (
 
-            /* NO PROJECTS */
+          ) : projects.length === 0 ? (
 
             <div className="empty-projects">
 
@@ -833,10 +892,7 @@ function Dashboard() {
 
             </div>
 
-          ) : filteredProjects.length ===
-            0 ? (
-
-            /* SEARCH EMPTY */
+          ) : filteredProjects.length === 0 ? (
 
             <div className="empty-projects">
 
@@ -867,8 +923,6 @@ function Dashboard() {
 
           ) : (
 
-            /* PROJECT GRID */
-
             <div className="projects-grid">
 
               {filteredProjects.map(
@@ -876,9 +930,7 @@ function Dashboard() {
 
                   <div
                     className="project-card"
-                    key={
-                      project.id
-                    }
+                    key={project.id}
                   >
 
                     <div className="project-card-top">
@@ -915,6 +967,8 @@ function Dashboard() {
 
                       <div className="project-actions">
 
+                        {/* RENAME */}
+
                         <button
                           className="project-action-btn"
                           title="Rename"
@@ -926,6 +980,8 @@ function Dashboard() {
                         >
                           ✎
                         </button>
+
+                        {/* DUPLICATE */}
 
                         <button
                           className="project-action-btn"
@@ -946,6 +1002,8 @@ function Dashboard() {
                             : "⧉"}
                         </button>
 
+                        {/* DELETE */}
+
                         <button
                           className="project-action-btn danger"
                           title="Delete"
@@ -964,6 +1022,8 @@ function Dashboard() {
                             ? "..."
                             : "⌫"}
                         </button>
+
+                        {/* OPEN */}
 
                         <button
                           className="project-open-btn"
@@ -1001,11 +1061,7 @@ function Dashboard() {
 
         <div
           className="project-modal-overlay"
-          onClick={() =>
-            setShowCreateProject(
-              false
-            )
-          }
+          onClick={closeCreateModal}
         >
 
           <div
@@ -1036,11 +1092,7 @@ function Dashboard() {
 
               <button
                 className="modal-close"
-                onClick={() =>
-                  setShowCreateProject(
-                    false
-                  )
-                }
+                onClick={closeCreateModal}
               >
                 ×
               </button>
@@ -1048,6 +1100,8 @@ function Dashboard() {
             </div>
 
             <div className="project-form">
+
+              {/* PROJECT NAME */}
 
               <div className="input-group">
 
@@ -1069,6 +1123,8 @@ function Dashboard() {
                 />
 
               </div>
+
+              {/* WEBSITE TYPE */}
 
               <div className="input-group">
 
@@ -1116,12 +1172,18 @@ function Dashboard() {
                   </option>
 
                   <option>
+                    SaaS
+                  </option>
+
+                  <option>
                     Other
                   </option>
 
                 </select>
 
               </div>
+
+              {/* AI PROMPT */}
 
               <div className="input-group">
 
@@ -1144,15 +1206,15 @@ function Dashboard() {
 
               </div>
 
+              {/* BUTTONS */}
+
               <div className="project-modal-actions">
 
                 <button
                   type="button"
                   className="cancel-project-btn"
-                  onClick={() =>
-                    setShowCreateProject(
-                      false
-                    )
+                  onClick={
+                    closeCreateModal
                   }
                 >
                   Cancel

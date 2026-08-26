@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Builder from "./pages/Builder";
+import Templates from "./pages/Templates";
 function LandingPage() {
   return (
     <div className="app">
@@ -418,7 +419,10 @@ function App() {
     <Routes>
 
       <Route path="/" element={<LandingPage />} />
-
+<Route
+  path="/templates"
+  element={<Templates />}
+/>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/dashboard" element={<Dashboard />} />
