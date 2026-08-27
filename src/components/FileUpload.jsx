@@ -4,12 +4,12 @@ import { supabase } from "../lib/supabase";
 function FileUpload({ projectId }) {
   const [user, setUser] = useState(null);
   const [files, setFiles] = useState([]);
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [replaceTarget, setReplaceTarget] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [processingFile, setProcessingFile] = useState("");
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -42,11 +42,6 @@ function FileUpload({ projectId }) {
         setLoading(true);
         setError("");
 
-        if (!projectId) {
-          setError("Project ID is missing.");
-          return;
-        }
-
         const {
           data: { user },
           error: userError,
@@ -60,26 +55,26 @@ function FileUpload({ projectId }) {
 
         if (!user) {
           setError("You are not logged in.");
+          setLoading(false);
           return;
         }
 
         setUser(user);
 
+        if (!projectId) {
+          setError("Project ID is missing.");
+          setLoading(false);
+          return;
+        }
+
         await loadFiles(user.id, projectId);
       } catch (err) {
-        console.error(
-          "File system initialization error:",
-          err
-        );
+        console.error("File initialization error:", err);
 
         if (mounted) {
           setError(
-            err?.message ||
-              "Failed to initialize project files."
+            err?.message || "Failed to initialize file manager."
           );
-        }
-      } finally {
-        if (mounted) {
           setLoading(false);
         }
       }
@@ -93,80 +88,35 @@ function FileUpload({ projectId }) {
   }, [projectId]);
 
   /* ========================================================
-     PATH HELPERS
+     LOAD FILES FROM DATABASE
   ======================================================== */
 
-  function getProjectFolder(userId = user?.id) {
-    if (!userId || !projectId) {
-      return "";
-    }
-
-    return `${userId}/${projectId}`;
-  }
-
-  function getFilePath(
-    fileName,
-    userId = user?.id
-  ) {
-    const folder = getProjectFolder(userId);
-
-    if (!folder || !fileName) {
-      return "";
-    }
-
-    return `${folder}/${fileName}`;
-  }
-
-  /* ========================================================
-     LOAD FILES
-  ======================================================== */
-
-  async function loadFiles(
-    userId,
-    currentProjectId
-  ) {
+  async function loadFiles(userId, currentProjectId) {
     try {
       setError("");
 
-      if (!userId || !currentProjectId) {
-        return;
-      }
-
-      const folder =
-        `${userId}/${currentProjectId}`;
-
-      const {
-        data,
-        error: listError,
-      } = await supabase.storage
-        .from("uploads")
-        .list(folder, {
-          limit: 100,
-          sortBy: {
-            column: "created_at",
-            order: "desc",
-          },
+      const { data, error } = await supabase
+        .from("project_files")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("project_id", currentProjectId)
+        .order("created_at", {
+          ascending: false,
         });
 
-      if (listError) {
-        throw listError;
+      if (error) {
+        throw error;
       }
 
-      setFiles(
-        (data || []).filter(
-          (file) => file.name
-        )
-      );
+      setFiles(data || []);
     } catch (err) {
-      console.error(
-        "Load files error:",
-        err
-      );
+      console.error("Load files error:", err);
 
       setError(
-        err?.message ||
-          "Failed to load files."
+        err?.message || "Failed to load project files."
       );
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -175,19 +125,15 @@ function FileUpload({ projectId }) {
   ======================================================== */
 
   function handleFileSelect(event) {
-    const file =
-      event.target.files?.[0];
+    const file = event.target.files?.[0];
 
     setMessage("");
     setError("");
+    setSelectedFile(null);
 
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
     if (file.size > MAX_FILE_SIZE) {
-      setSelectedFile(null);
-
       setError(
         "File is too large. Maximum size is 10 MB."
       );
@@ -196,11 +142,7 @@ function FileUpload({ projectId }) {
       return;
     }
 
-    if (
-      !ALLOWED_TYPES.includes(file.type)
-    ) {
-      setSelectedFile(null);
-
+    if (!ALLOWED_TYPES.includes(file.type)) {
       setError(
         "This file type is not supported."
       );
@@ -213,60 +155,82 @@ function FileUpload({ projectId }) {
   }
 
   /* ========================================================
-     START NORMAL UPLOAD
-  ======================================================== */
-
-  function openUploadPicker() {
-    setReplaceTarget(null);
-    setSelectedFile(null);
-    setMessage("");
-    setError("");
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-      fileInputRef.current.click();
-    }
-  }
-
-  /* ========================================================
      START REPLACE
   ======================================================== */
 
-  function openReplacePicker(file) {
-    setReplaceTarget(file);
-    setSelectedFile(null);
+  function handleStartReplace(file) {
     setMessage("");
     setError("");
+    setReplaceTarget(file);
 
     if (fileInputRef.current) {
-      fileInputRef.current.value = "";
       fileInputRef.current.click();
     }
   }
 
   /* ========================================================
-     UPLOAD / REPLACE
+     REPLACE FILE SELECT
+  ======================================================== */
+
+  function handleReplaceFileSelect(event) {
+    const file = event.target.files?.[0];
+
+    setMessage("");
+    setError("");
+
+    if (!file) {
+      setReplaceTarget(null);
+      return;
+    }
+
+    if (!replaceTarget) {
+      setError("Replace target is missing.");
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setError(
+        "File is too large. Maximum size is 10 MB."
+      );
+
+      event.target.value = "";
+      setReplaceTarget(null);
+      return;
+    }
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setError(
+        "This file type is not supported."
+      );
+
+      event.target.value = "";
+      setReplaceTarget(null);
+      return;
+    }
+
+    replaceFile(
+      replaceTarget,
+      file
+    );
+  }
+
+  /* ========================================================
+     UPLOAD NEW FILE
   ======================================================== */
 
   async function handleUpload() {
     if (!selectedFile) {
-      setError(
-        "Please choose a file first."
-      );
+      setError("Please choose a file first.");
       return;
     }
 
     if (!user) {
-      setError(
-        "You are not logged in."
-      );
+      setError("You are not logged in.");
       return;
     }
 
     if (!projectId) {
-      setError(
-        "Project ID is missing."
-      );
+      setError("Project ID is missing.");
       return;
     }
 
@@ -275,50 +239,19 @@ function FileUpload({ projectId }) {
     setError("");
 
     try {
-      /*
-       * =====================================================
-       * REPLACE EXISTING FILE
-       * =====================================================
-       */
-
-      if (replaceTarget) {
-        await handleReplaceFile();
-        return;
-      }
-
-      /*
-       * =====================================================
-       * NORMAL UPLOAD
-       * =====================================================
-       */
-
-      const safeName =
-        selectedFile.name
-          .trim()
-          .replace(/\s+/g, "-")
-          .replace(
-            /[^a-zA-Z0-9._-]/g,
-            ""
-          );
-
-      const finalName =
-        safeName ||
-        `file-${Date.now()}`;
+      const safeName = selectedFile.name
+        .replace(/\s+/g, "-")
+        .replace(/[^a-zA-Z0-9._-]/g, "");
 
       const uniqueName =
-        `${crypto.randomUUID()}-${finalName}`;
+        `${crypto.randomUUID()}-${safeName}`;
 
       const filePath =
-        getFilePath(
-          uniqueName,
-          user.id
-        );
+        `${user.id}/${projectId}/${uniqueName}`;
 
-      if (!filePath) {
-        throw new Error(
-          "Could not create file path."
-        );
-      }
+      /* ---------------------------------------------
+         1. Upload actual file to Storage
+      --------------------------------------------- */
 
       const {
         error: uploadError,
@@ -340,11 +273,46 @@ function FileUpload({ projectId }) {
         throw uploadError;
       }
 
+      /* ---------------------------------------------
+         2. Save metadata to project_files
+      --------------------------------------------- */
+
+      const {
+        error: databaseError,
+      } = await supabase
+        .from("project_files")
+        .insert({
+          user_id: user.id,
+          project_id: projectId,
+          file_name: selectedFile.name,
+          file_path: filePath,
+          file_type:
+            selectedFile.type ||
+            "application/octet-stream",
+          file_size: selectedFile.size,
+        });
+
+      /* ---------------------------------------------
+         Rollback Storage if DB insert fails
+      --------------------------------------------- */
+
+      if (databaseError) {
+        await supabase.storage
+          .from("uploads")
+          .remove([filePath]);
+
+        throw databaseError;
+      }
+
       setMessage(
         `"${selectedFile.name}" uploaded successfully.`
       );
 
-      resetFileInput();
+      setSelectedFile(null);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
 
       await loadFiles(
         user.id,
@@ -358,11 +326,10 @@ function FileUpload({ projectId }) {
 
       setError(
         err?.message ||
-          "File upload failed."
+        "File upload failed."
       );
     } finally {
       setUploading(false);
-      setReplaceTarget(null);
     }
   }
 
@@ -370,116 +337,135 @@ function FileUpload({ projectId }) {
      REPLACE FILE
   ======================================================== */
 
-  async function handleReplaceFile() {
-    if (
-      !replaceTarget ||
-      !selectedFile
-    ) {
+  async function replaceFile(
+    oldFile,
+    newFile
+  ) {
+    if (!user || !projectId) {
+      setError(
+        "User or project information is missing."
+      );
       return;
     }
 
-    const oldPath =
-      getFilePath(
-        replaceTarget.name,
-        user.id
-      );
+    setUploading(true);
+    setMessage("");
+    setError("");
 
-    const safeName =
-      selectedFile.name
-        .trim()
+    try {
+      const safeName = newFile.name
         .replace(/\s+/g, "-")
-        .replace(
-          /[^a-zA-Z0-9._-]/g,
-          ""
+        .replace(/[^a-zA-Z0-9._-]/g, "");
+
+      const newFileName =
+        `${crypto.randomUUID()}-${safeName}`;
+
+      const newFilePath =
+        `${user.id}/${projectId}/${newFileName}`;
+
+      /* ---------------------------------------------
+         1. Upload replacement file
+      --------------------------------------------- */
+
+      const {
+        error: uploadError,
+      } = await supabase.storage
+        .from("uploads")
+        .upload(
+          newFilePath,
+          newFile,
+          {
+            cacheControl: "3600",
+            upsert: false,
+            contentType:
+              newFile.type ||
+              "application/octet-stream",
+          }
         );
 
-    const finalName =
-      safeName ||
-      `file-${Date.now()}`;
+      if (uploadError) {
+        throw uploadError;
+      }
 
-    const newFileName =
-      `${crypto.randomUUID()}-${finalName}`;
+      /* ---------------------------------------------
+         2. Update database metadata
+      --------------------------------------------- */
 
-    const newPath =
-      getFilePath(
-        newFileName,
-        user.id
-      );
-
-    /*
-     * Upload new version first.
-     * If upload succeeds, remove old file.
-     */
-
-    const {
-      error: uploadError,
-    } = await supabase.storage
-      .from("uploads")
-      .upload(
-        newPath,
-        selectedFile,
-        {
-          cacheControl: "3600",
-          upsert: false,
-          contentType:
-            selectedFile.type ||
+      const {
+        error: databaseError,
+      } = await supabase
+        .from("project_files")
+        .update({
+          file_name: newFile.name,
+          file_path: newFilePath,
+          file_type:
+            newFile.type ||
             "application/octet-stream",
+          file_size: newFile.size,
+        })
+        .eq("id", oldFile.id)
+        .eq("user_id", user.id)
+        .eq("project_id", projectId);
+
+      /* ---------------------------------------------
+         Rollback new Storage file
+      --------------------------------------------- */
+
+      if (databaseError) {
+        await supabase.storage
+          .from("uploads")
+          .remove([newFilePath]);
+
+        throw databaseError;
+      }
+
+      /* ---------------------------------------------
+         3. Delete old Storage file
+      --------------------------------------------- */
+
+      if (oldFile.file_path) {
+        const {
+          error: oldDeleteError,
+        } = await supabase.storage
+          .from("uploads")
+          .remove([
+            oldFile.file_path,
+          ]);
+
+        if (oldDeleteError) {
+          console.warn(
+            "Old file cleanup warning:",
+            oldDeleteError
+          );
         }
+      }
+
+      setMessage(
+        `"${oldFile.file_name}" replaced successfully.`
       );
 
-    if (uploadError) {
-      throw uploadError;
-    }
+      setReplaceTarget(null);
 
-    /*
-     * Delete old version.
-     */
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
 
-    const {
-      error: deleteError,
-    } = await supabase.storage
-      .from("uploads")
-      .remove([oldPath]);
-
-    if (deleteError) {
-      /*
-       * New file already exists.
-       * We intentionally don't delete it here,
-       * so the user's replacement isn't lost.
-       */
-
+      await loadFiles(
+        user.id,
+        projectId
+      );
+    } catch (err) {
       console.error(
-        "Old file delete failed:",
-        deleteError
+        "Replace error:",
+        err
       );
 
-      setMessage(
-        "Replacement uploaded, but the old file could not be removed."
+      setError(
+        err?.message ||
+        "File replacement failed."
       );
-    } else {
-      setMessage(
-        `"${selectedFile.name}" replaced successfully.`
-      );
-    }
-
-    resetFileInput();
-
-    await loadFiles(
-      user.id,
-      projectId
-    );
-  }
-
-  /* ========================================================
-     RESET INPUT
-  ======================================================== */
-
-  function resetFileInput() {
-    setSelectedFile(null);
-    setReplaceTarget(null);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -487,33 +473,22 @@ function FileUpload({ projectId }) {
      DOWNLOAD
   ======================================================== */
 
-  async function handleDownload(
-    fileName
-  ) {
-    if (!user || !projectId) {
-      return;
-    }
-
-    setProcessingFile(fileName);
-    setError("");
+  async function handleDownload(file) {
+    if (!user || !projectId) return;
 
     try {
-      const filePath =
-        getFilePath(
-          fileName,
-          user.id
-        );
+      setError("");
+      setMessage("");
 
       const {
         data,
-        error: downloadError,
-      } =
-        await supabase.storage
-          .from("uploads")
-          .download(filePath);
+        error,
+      } = await supabase.storage
+        .from("uploads")
+        .download(file.file_path);
 
-      if (downloadError) {
-        throw downloadError;
+      if (error) {
+        throw error;
       }
 
       const url =
@@ -523,15 +498,10 @@ function FileUpload({ projectId }) {
         document.createElement("a");
 
       link.href = url;
-
       link.download =
-        getOriginalFileName(
-          fileName
-        );
+        file.file_name;
 
-      document.body.appendChild(
-        link
-      );
+      document.body.appendChild(link);
 
       link.click();
 
@@ -548,10 +518,8 @@ function FileUpload({ projectId }) {
 
       setError(
         err?.message ||
-          "Download failed."
+        "Download failed."
       );
-    } finally {
-      setProcessingFile("");
     }
   }
 
@@ -559,50 +527,55 @@ function FileUpload({ projectId }) {
      DELETE
   ======================================================== */
 
-  async function handleDelete(
-    fileName
-  ) {
-    if (!user || !projectId) {
-      return;
-    }
+  async function handleDelete(file) {
+    if (!user || !projectId) return;
 
     const confirmed =
       window.confirm(
-        `Delete "${getOriginalFileName(
-          fileName
-        )}"?`
+        `Delete "${file.file_name}"?`
       );
 
-    if (!confirmed) {
-      return;
-    }
-
-    setProcessingFile(fileName);
-    setError("");
-    setMessage("");
+    if (!confirmed) return;
 
     try {
-      const filePath =
-        getFilePath(
-          fileName,
-          user.id
-        );
+      setError("");
+      setMessage("");
+
+      /* ---------------------------------------------
+         1. Delete Storage file
+      --------------------------------------------- */
 
       const {
-        error: deleteError,
-      } =
-        await supabase.storage
-          .from("uploads")
-          .remove([
-            filePath,
-          ]);
+        error: storageError,
+      } = await supabase.storage
+        .from("uploads")
+        .remove([
+          file.file_path,
+        ]);
 
-      if (deleteError) {
-        throw deleteError;
+      if (storageError) {
+        throw storageError;
+      }
+
+      /* ---------------------------------------------
+         2. Delete database metadata
+      --------------------------------------------- */
+
+      const {
+        error: databaseError,
+      } = await supabase
+        .from("project_files")
+        .delete()
+        .eq("id", file.id)
+        .eq("user_id", user.id)
+        .eq("project_id", projectId);
+
+      if (databaseError) {
+        throw databaseError;
       }
 
       setMessage(
-        "File deleted successfully."
+        `"${file.file_name}" deleted successfully.`
       );
 
       await loadFiles(
@@ -617,10 +590,8 @@ function FileUpload({ projectId }) {
 
       setError(
         err?.message ||
-          "Delete failed."
+        "Delete failed."
       );
-    } finally {
-      setProcessingFile("");
     }
   }
 
@@ -628,36 +599,25 @@ function FileUpload({ projectId }) {
      PREVIEW
   ======================================================== */
 
-  async function handlePreview(
-    fileName
-  ) {
-    if (!user || !projectId) {
-      return;
-    }
-
-    setProcessingFile(fileName);
-    setError("");
+  async function handlePreview(file) {
+    if (!user || !projectId) return;
 
     try {
-      const filePath =
-        getFilePath(
-          fileName,
-          user.id
-        );
+      setError("");
+      setMessage("");
 
       const {
         data,
-        error: signedUrlError,
-      } =
-        await supabase.storage
-          .from("uploads")
-          .createSignedUrl(
-            filePath,
-            60 * 60
-          );
+        error,
+      } = await supabase.storage
+        .from("uploads")
+        .createSignedUrl(
+          file.file_path,
+          60 * 60
+        );
 
-      if (signedUrlError) {
-        throw signedUrlError;
+      if (error) {
+        throw error;
       }
 
       if (!data?.signedUrl) {
@@ -679,108 +639,16 @@ function FileUpload({ projectId }) {
 
       setError(
         err?.message ||
-          "Preview failed."
+        "Preview failed."
       );
-    } finally {
-      setProcessingFile("");
     }
   }
-
-  /* ========================================================
-     AI ASSET FOUNDATION
-  ======================================================== */
-
-  async function getAIFileReference(
-    fileName
-  ) {
-    if (!user || !projectId) {
-      return null;
-    }
-
-    try {
-      const filePath =
-        getFilePath(
-          fileName,
-          user.id
-        );
-
-      const {
-        data,
-        error: signedUrlError,
-      } =
-        await supabase.storage
-          .from("uploads")
-          .createSignedUrl(
-            filePath,
-            60 * 60
-          );
-
-      if (signedUrlError) {
-        throw signedUrlError;
-      }
-
-      return {
-        projectId,
-        userId: user.id,
-        bucket: "uploads",
-        storagePath: filePath,
-        fileName,
-        url: data?.signedUrl || null,
-        type: getFileType(fileName),
-      };
-    } catch (err) {
-      console.error(
-        "AI file reference error:",
-        err
-      );
-
-      return null;
-    }
-  }
-
-  /*
-   * This function will later allow Builder/AI
-   * to request a project asset.
-   *
-   * Example:
-   *
-   * const asset =
-   *   await getAIFileReference(
-   *     file.name
-   *   );
-   */
 
   /* ========================================================
      HELPERS
   ======================================================== */
 
-  function getOriginalFileName(
-    name
-  ) {
-    if (!name) {
-      return "";
-    }
-
-    /*
-     * Current upload format:
-     *
-     * UUID-original-name.ext
-     */
-
-    const uuidPattern =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(.+)$/i;
-
-    const match =
-      name.match(uuidPattern);
-
-    if (match?.[1]) {
-      return match[1];
-    }
-
-    return name;
-  }
-
-  function getFileType(name) {
+  function getFileIcon(name) {
     const extension =
       name
         ?.split(".")
@@ -797,11 +665,11 @@ function FileUpload({ projectId }) {
         "svg",
       ].includes(extension)
     ) {
-      return "image";
+      return "🖼️";
     }
 
     if (extension === "pdf") {
-      return "pdf";
+      return "📕";
     }
 
     if (
@@ -811,7 +679,18 @@ function FileUpload({ projectId }) {
         "7z",
       ].includes(extension)
     ) {
-      return "archive";
+      return "📦";
+    }
+
+    if (
+      [
+        "mp4",
+        "webm",
+        "mov",
+        "avi",
+      ].includes(extension)
+    ) {
+      return "🎬";
     }
 
     if (
@@ -819,29 +698,6 @@ function FileUpload({ projectId }) {
         "txt",
       ].includes(extension)
     ) {
-      return "text";
-    }
-
-    return "file";
-  }
-
-  function getFileIcon(name) {
-    const type =
-      getFileType(name);
-
-    if (type === "image") {
-      return "🖼️";
-    }
-
-    if (type === "pdf") {
-      return "📕";
-    }
-
-    if (type === "archive") {
-      return "📦";
-    }
-
-    if (type === "text") {
       return "📝";
     }
 
@@ -849,9 +705,7 @@ function FileUpload({ projectId }) {
   }
 
   function formatSize(bytes) {
-    if (!bytes) {
-      return "0 B";
-    }
+    if (!bytes) return "0 B";
 
     const units = [
       "B",
@@ -860,14 +714,13 @@ function FileUpload({ projectId }) {
       "GB",
     ];
 
-    const index =
-      Math.min(
-        Math.floor(
-          Math.log(bytes) /
-            Math.log(1024)
-        ),
-        units.length - 1
-      );
+    const index = Math.min(
+      Math.floor(
+        Math.log(bytes) /
+        Math.log(1024)
+      ),
+      units.length - 1
+    );
 
     return `${(
       bytes /
@@ -877,14 +730,28 @@ function FileUpload({ projectId }) {
     )} ${units[index]}`;
   }
 
-  function isPreviewable(
-    fileName
-  ) {
-    return [
-      "image",
-      "pdf",
-    ].includes(
-      getFileType(fileName)
+  function isPreviewable(file) {
+    const type =
+      file.file_type || "";
+
+    const extension =
+      file.file_name
+        ?.split(".")
+        .pop()
+        ?.toLowerCase();
+
+    return (
+      type.startsWith("image/") ||
+      type === "application/pdf" ||
+      [
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "webp",
+        "svg",
+        "pdf",
+      ].includes(extension)
     );
   }
 
@@ -895,14 +762,32 @@ function FileUpload({ projectId }) {
   return (
     <div className="project-file-manager">
 
-      {/* FILE PICKER */}
+      {/* HEADER */}
+
+      <div className="file-upload-title">
+        <span>📁</span>
+
+        <div>
+          <strong>
+            Project Files
+          </strong>
+
+          <small>
+            Upload and manage your project files
+          </small>
+        </div>
+      </div>
+
+      {/* UPLOAD INPUT */}
 
       <input
         ref={fileInputRef}
         id="project-file-input"
         type="file"
         onChange={
-          handleFileSelect
+          replaceTarget
+            ? handleReplaceFileSelect
+            : handleFileSelect
         }
         disabled={uploading}
       />
@@ -911,12 +796,7 @@ function FileUpload({ projectId }) {
 
       {selectedFile && (
         <div className="selected-file-box">
-
-          <span>
-            {getFileIcon(
-              selectedFile.name
-            )}
-          </span>
+          <span>📎</span>
 
           <div>
             <strong>
@@ -929,29 +809,6 @@ function FileUpload({ projectId }) {
               )}
             </small>
           </div>
-
-        </div>
-      )}
-
-      {/* REPLACE TARGET */}
-
-      {replaceTarget && (
-        <div className="replace-file-box">
-
-          <span>↻</span>
-
-          <div>
-            <strong>
-              Replacing file
-            </strong>
-
-            <small>
-              {getOriginalFileName(
-                replaceTarget.name
-              )}
-            </small>
-          </div>
-
         </div>
       )}
 
@@ -959,34 +816,34 @@ function FileUpload({ projectId }) {
 
       <button
         onClick={
-          selectedFile
-            ? handleUpload
-            : openUploadPicker
+          handleUpload
         }
-        disabled={uploading}
+        disabled={
+          !selectedFile ||
+          uploading
+        }
       >
         {uploading
-          ? replaceTarget
-            ? "Replacing..."
-            : "Uploading..."
-          : selectedFile
-          ? replaceTarget
-            ? "↻ Replace File"
-            : "⬆ Upload File"
-          : "📤 Choose File"}
+          ? "Uploading..."
+          : "⬆ Upload File"}
       </button>
 
-      {/* CANCEL REPLACE */}
+      {/* REPLACE STATUS */}
 
-      {replaceTarget && !uploading && (
-        <button
-          type="button"
-          onClick={
-            resetFileInput
-          }
-        >
-          Cancel
-        </button>
+      {replaceTarget && (
+        <div className="selected-file-box">
+          <span>🔄</span>
+
+          <div>
+            <strong>
+              Replacing:
+            </strong>
+
+            <small>
+              {replaceTarget.file_name}
+            </small>
+          </div>
+        </div>
       )}
 
       {/* MESSAGE */}
@@ -1010,7 +867,6 @@ function FileUpload({ projectId }) {
       <div className="uploaded-files">
 
         <div className="uploaded-files-header">
-
           <strong>
             Your Project Files
           </strong>
@@ -1018,7 +874,6 @@ function FileUpload({ projectId }) {
           <span>
             {files.length}
           </span>
-
         </div>
 
         {loading ? (
@@ -1027,136 +882,108 @@ function FileUpload({ projectId }) {
           </div>
         ) : files.length === 0 ? (
           <div className="empty-files">
-
-            <span>
-              📂
-            </span>
+            <span>📂</span>
 
             <p>
               No files uploaded yet.
             </p>
-
-            <small>
-              Upload images and files
-              for this project.
-            </small>
-
           </div>
         ) : (
           <div className="files-list">
 
-            {files.map((file) => {
-              const busy =
-                processingFile ===
-                file.name;
+            {files.map((file) => (
+              <div
+                className="uploaded-file-item"
+                key={file.id}
+              >
 
-              return (
-                <div
-                  className="uploaded-file-item"
-                  key={
-                    file.id ||
-                    file.name
-                  }
-                >
+                {/* FILE INFO */}
 
-                  {/* FILE INFO */}
+                <div className="file-info">
 
-                  <div className="file-info">
-
-                    <div className="file-icon">
-                      {getFileIcon(
-                        file.name
-                      )}
-                    </div>
-
-                    <div className="file-details">
-
-                      <strong
-                        title={
-                          getOriginalFileName(
-                            file.name
-                          )
-                        }
-                      >
-                        {getOriginalFileName(
-                          file.name
-                        )}
-                      </strong>
-
-                      <small>
-                        {formatSize(
-                          file.metadata
-                            ?.size ||
-                            0
-                        )}
-                      </small>
-
-                    </div>
-
+                  <div className="file-icon">
+                    {getFileIcon(
+                      file.file_name
+                    )}
                   </div>
 
-                  {/* ACTIONS */}
+                  <div className="file-details">
 
-                  <div className="file-actions">
-
-                    {isPreviewable(
-                      file.name
-                    ) && (
-                      <button
-                        onClick={() =>
-                          handlePreview(
-                            file.name
-                          )
-                        }
-                        disabled={busy}
-                        title="Preview"
-                      >
-                        👁
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() =>
-                        handleDownload(
-                          file.name
-                        )
+                    <strong
+                      title={
+                        file.file_name
                       }
-                      disabled={busy}
-                      title="Download"
                     >
-                      ↓
-                    </button>
+                      {file.file_name}
+                    </strong>
 
-                    <button
-                      onClick={() =>
-                        openReplacePicker(
-                          file
-                        )
-                      }
-                      disabled={busy}
-                      title="Replace / Update"
-                    >
-                      ↻
-                    </button>
-
-                    <button
-                      className="delete-file-btn"
-                      onClick={() =>
-                        handleDelete(
-                          file.name
-                        )
-                      }
-                      disabled={busy}
-                      title="Delete"
-                    >
-                      🗑
-                    </button>
+                    <small>
+                      {formatSize(
+                        file.file_size
+                      )}
+                    </small>
 
                   </div>
 
                 </div>
-              );
-            })}
+
+                {/* ACTIONS */}
+
+                <div className="file-actions">
+
+                  {isPreviewable(file) && (
+                    <button
+                      onClick={() =>
+                        handlePreview(
+                          file
+                        )
+                      }
+                      title="Preview"
+                    >
+                      👁
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() =>
+                      handleDownload(
+                        file
+                      )
+                    }
+                    title="Download"
+                  >
+                    ↓
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      handleStartReplace(
+                        file
+                      )
+                    }
+                    disabled={uploading}
+                    title="Replace"
+                  >
+                    🔄
+                  </button>
+
+                  <button
+                    className="delete-file-btn"
+                    onClick={() =>
+                      handleDelete(
+                        file
+                      )
+                    }
+                    disabled={uploading}
+                    title="Delete"
+                  >
+                    🗑
+                  </button>
+
+                </div>
+
+              </div>
+            ))}
 
           </div>
         )}
