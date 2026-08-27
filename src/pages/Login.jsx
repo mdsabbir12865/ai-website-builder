@@ -17,32 +17,75 @@ function Login() {
 
     setMessage("");
 
-    if (!email || !password) {
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail || !password) {
       setMessage("Email এবং Password দিন।");
       return;
     }
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password: password,
-    });
+    try {
+      const {
+        data,
+        error,
+      } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
 
-    setLoading(false);
+      if (error) {
+        console.error("Login error:", error);
 
-    if (error) {
-      setMessage(error.message);
-      return;
+        setMessage(error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!data?.session || !data?.user) {
+        console.error(
+          "Login succeeded but no session/user returned:",
+          data
+        );
+
+        setMessage(
+          "Login session could not be created. Please try again."
+        );
+
+        setLoading(false);
+        return;
+      }
+
+      console.log("Login successful:", data.user.id);
+
+      /*
+       * Give Supabase auth state a moment to finish
+       * updating before navigating.
+       */
+      await new Promise((resolve) =>
+        setTimeout(resolve, 150)
+      );
+
+      setLoading(false);
+
+      navigate("/dashboard", {
+        replace: true,
+      });
+    } catch (error) {
+      console.error("Unexpected login error:", error);
+
+      setMessage(
+        error?.message ||
+          "Something went wrong while logging in."
+      );
+
+      setLoading(false);
     }
-
-    // Login successful → Dashboard
-    navigate("/dashboard", { replace: true });
   }
 
   return (
     <div className="auth-page">
-
       <div className="auth-card">
 
         {/* LOGO */}
@@ -68,38 +111,48 @@ function Login() {
 
           {/* EMAIL */}
           <div className="input-group">
-
             <label>Email</label>
 
             <input
               type="email"
               placeholder="you@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              onChange={(e) =>
+                setEmail(e.target.value)
+              }
+              disabled={loading}
             />
-
           </div>
 
           {/* PASSWORD */}
           <div className="input-group">
 
             <div className="password-label">
-
               <label>Password</label>
 
-              <button type="button">
+              <button
+                type="button"
+                onClick={() => {
+                  setMessage(
+                    "Password reset is not available yet."
+                  );
+                }}
+              >
                 Forgot password?
               </button>
-
             </div>
 
             <input
               type="password"
               placeholder="Enter your password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              onChange={(e) =>
+                setPassword(e.target.value)
+              }
+              disabled={loading}
             />
-
           </div>
 
           {/* MESSAGE */}
@@ -115,11 +168,14 @@ function Login() {
             className="auth-submit"
             disabled={loading}
           >
-            {loading ? "Logging in..." : "Login"}
+            {loading
+              ? "Logging in..."
+              : "Login"}
 
-            {!loading && <span>→</span>}
+            {!loading && (
+              <span>→</span>
+            )}
           </button>
-
         </form>
 
         {/* DIVIDER */}
@@ -131,6 +187,11 @@ function Login() {
         <button
           className="google-btn"
           type="button"
+          onClick={() => {
+            setMessage(
+              "Google login will be available soon."
+            );
+          }}
         >
           <span>G</span>
           Continue with Google
@@ -138,13 +199,13 @@ function Login() {
 
         {/* REGISTER */}
         <p className="auth-switch">
-          Don't have an account?
+          Don't have an account?{" "}
 
           <button
             type="button"
-            onClick={() => {
-              navigate("/register");
-            }}
+            onClick={() =>
+              navigate("/register")
+            }
           >
             Create account
           </button>
@@ -156,7 +217,6 @@ function Login() {
       <div className="auth-footer">
         © 2026 WebAI. All rights reserved.
       </div>
-
     </div>
   );
 }

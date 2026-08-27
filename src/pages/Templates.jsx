@@ -2422,68 +2422,278 @@ function Templates() {
 
   const [category, setCategory] = useState("All");
   const [search, setSearch] = useState("");
-  const [usingTemplate, setUsingTemplate] = useState(null);
 
-  const filteredTemplates = TEMPLATES.filter((template) => {
-    const matchesCategory =
-      category === "All" ||
-      template.category === category;
+  const [usingTemplate, setUsingTemplate] =
+    useState(null);
 
-    const query = search.trim().toLowerCase();
+  const filteredTemplates = TEMPLATES.filter(
+    (template) => {
+      const matchesCategory =
+        category === "All" ||
+        template.category === category;
 
-    const matchesSearch =
-      !query ||
-      template.name.toLowerCase().includes(query) ||
-      template.category.toLowerCase().includes(query) ||
-      template.description.toLowerCase().includes(query);
+      const query = search
+        .trim()
+        .toLowerCase();
 
-    return matchesCategory && matchesSearch;
-  });
+      const matchesSearch =
+        !query ||
+        template.name
+          .toLowerCase()
+          .includes(query) ||
+        template.category
+          .toLowerCase()
+          .includes(query) ||
+        template.description
+          .toLowerCase()
+          .includes(query);
+
+      return (
+        matchesCategory &&
+        matchesSearch
+      );
+    }
+  );
 
   // ========================================================
-  // USE TEMPLATE
+  // CREATE PROJECT FROM TEMPLATE
   // ========================================================
 
   async function handleUseTemplate(template) {
-    if (usingTemplate) return;
+    if (usingTemplate !== null) {
+      return;
+    }
+
+    if (!template?.id) {
+      alert("Invalid template.");
+      return;
+    }
 
     setUsingTemplate(template.id);
 
     try {
+      // ----------------------------------------------------
+      // STEP 1: Get current session
+      // ----------------------------------------------------
+
+      let {
+        data: sessionData,
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      console.log(
+        "Template session:",
+        sessionData?.session
+          ? "Session found"
+          : "No session"
+      );
+
+      // ----------------------------------------------------
+      // STEP 2: Try refreshing if session error
+      // ----------------------------------------------------
+
+      if (sessionError) {
+        console.error(
+          "Initial session error:",
+          sessionError
+        );
+
+        const {
+          data: refreshData,
+          error: refreshError,
+        } =
+          await supabase.auth.refreshSession();
+
+        if (refreshError) {
+          console.error(
+            "Session refresh failed:",
+            refreshError
+          );
+
+          alert(
+            "Your login session has expired. Please login again."
+          );
+
+          setUsingTemplate(null);
+
+          navigate("/login", {
+            replace: true,
+          });
+
+          return;
+        }
+
+        sessionData = refreshData;
+      }
+
+      // ----------------------------------------------------
+      // STEP 3: Make sure session exists
+      // ----------------------------------------------------
+
+      let session =
+        sessionData?.session;
+
+      if (!session) {
+        console.warn(
+          "No active session. Trying refresh..."
+        );
+
+        const {
+          data: refreshData,
+          error: refreshError,
+        } =
+          await supabase.auth.refreshSession();
+
+        if (refreshError || !refreshData?.session) {
+          console.error(
+            "No usable session:",
+            refreshError
+          );
+
+          alert(
+            "Please login first."
+          );
+
+          setUsingTemplate(null);
+
+          navigate("/login", {
+            replace: true,
+          });
+
+          return;
+        }
+
+        session =
+          refreshData.session;
+      }
+
+      // ----------------------------------------------------
+      // STEP 4: Get user
+      // ----------------------------------------------------
+
+      let user = session?.user;
+
+      if (!user?.id) {
+        const {
+          data: userData,
+          error: userError,
+        } =
+          await supabase.auth.getUser();
+
+        if (userError) {
+          console.error(
+            "User verification error:",
+            userError
+          );
+
+          // One final session refresh attempt
+          const {
+            data: refreshData,
+            error: refreshError,
+          } =
+            await supabase.auth.refreshSession();
+
+          if (
+            refreshError ||
+            !refreshData?.session?.user?.id
+          ) {
+            console.error(
+              "Final authentication failure:",
+              refreshError
+            );
+
+            alert(
+              "Could not verify your account. Please login again."
+            );
+
+            setUsingTemplate(null);
+
+            navigate("/login", {
+              replace: true,
+            });
+
+            return;
+          }
+
+          session =
+            refreshData.session;
+
+          user =
+            refreshData.session.user;
+        } else {
+          user = userData?.user;
+        }
+      }
+
+      // ----------------------------------------------------
+      // STEP 5: Final user validation
+      // ----------------------------------------------------
+
+      if (!user?.id) {
+        alert(
+          "Could not find your account. Please login again."
+        );
+
+        setUsingTemplate(null);
+
+        navigate("/login", {
+          replace: true,
+        });
+
+        return;
+      }
+
+      console.log(
+        "Authenticated user:",
+        user.id
+      );
+
+      // ----------------------------------------------------
+      // STEP 6: Prepare project data
+      // ----------------------------------------------------
+
+      const projectPayload = {
+        user_id: user.id,
+
+        name:
+          `${template.name} Project`,
+
+        type:
+          template.category,
+
+        prompt:
+          template.prompt || "",
+
+        html_code:
+          template.html || "",
+
+        css_code:
+          template.css || "",
+
+        js_code:
+          template.js || "",
+      };
+
+      console.log(
+        "Creating template project..."
+      );
+
+      // ----------------------------------------------------
+      // STEP 7: Insert project
+      // ----------------------------------------------------
+
       const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError) {
-        console.error("User check error:", userError);
-        alert("Could not verify your account.");
-        setUsingTemplate(null);
-        return;
-      }
-
-      if (!user) {
-        alert("Please login first.");
-        navigate("/login");
-        setUsingTemplate(null);
-        return;
-      }
-
-      const { data, error } = await supabase
+        data,
+        error,
+      } = await supabase
         .from("projects")
-        .insert([
-          {
-            user_id: user.id,
-            name: `${template.name} Project`,
-            type: template.category,
-            prompt: template.prompt,
-            html_code: template.html || "",
-            css_code: template.css || "",
-            js_code: template.js || "",
-          },
-        ])
-        .select()
+        .insert(projectPayload)
+        .select("id")
         .single();
+
+      // ----------------------------------------------------
+      // STEP 8: Database error
+      // ----------------------------------------------------
 
       if (error) {
         console.error(
@@ -2491,18 +2701,64 @@ function Templates() {
           error
         );
 
+        /*
+         * Common RLS error handling
+         */
+        if (
+          error.code === "42501" ||
+          error.message
+            ?.toLowerCase()
+            .includes("row-level security")
+        ) {
+          alert(
+            "Project permission denied. Please check your Supabase projects RLS policy."
+          );
+        } else {
+          alert(
+            `Could not create project.\n\n${error.message}`
+          );
+        }
+
+        setUsingTemplate(null);
+        return;
+      }
+
+      // ----------------------------------------------------
+      // STEP 9: Validate project ID
+      // ----------------------------------------------------
+
+      if (!data?.id) {
+        console.error(
+          "No project ID returned:",
+          data
+        );
+
         alert(
-          "Could not create project: " +
-            error.message
+          "Project was created, but no project ID was returned."
         );
 
         setUsingTemplate(null);
         return;
       }
 
-      navigate(`/builder/${data.id}`);
+      console.log(
+        "Template project created:",
+        data.id
+      );
+
+      // ----------------------------------------------------
+      // STEP 10: Open Builder
+      // ----------------------------------------------------
+
+      navigate(
+        `/builder/${data.id}`
+      );
+
     } catch (error) {
-      console.error("Template error:", error);
+      console.error(
+        "Unexpected template error:",
+        error
+      );
 
       alert(
         error?.message ||
@@ -2516,7 +2772,9 @@ function Templates() {
   return (
     <div className="templates-page">
 
-      {/* HEADER */}
+      {/* ==================================================
+          HEADER
+      ================================================== */}
 
       <header className="templates-header">
 
@@ -2524,7 +2782,10 @@ function Templates() {
 
           <button
             className="templates-back-btn"
-            onClick={() => navigate("/dashboard")}
+            type="button"
+            onClick={() =>
+              navigate("/dashboard")
+            }
           >
             ←
           </button>
@@ -2548,15 +2809,19 @@ function Templates() {
 
         <button
           className="templates-dashboard-btn"
-          onClick={() => navigate("/dashboard")}
+          type="button"
+          onClick={() =>
+            navigate("/dashboard")
+          }
         >
           Dashboard
         </button>
 
       </header>
 
-
-      {/* TOOLBAR */}
+      {/* ==================================================
+          TOOLBAR
+      ================================================== */}
 
       <section className="templates-toolbar">
 
@@ -2578,7 +2843,9 @@ function Templates() {
           {search && (
             <button
               type="button"
-              onClick={() => setSearch("")}
+              onClick={() =>
+                setSearch("")
+              }
             >
               ×
             </button>
@@ -2586,32 +2853,34 @@ function Templates() {
 
         </div>
 
-
         <div className="template-categories">
 
-          {CATEGORIES.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={
-                category === item
-                  ? "template-category active"
-                  : "template-category"
-              }
-              onClick={() =>
-                setCategory(item)
-              }
-            >
-              {item}
-            </button>
-          ))}
+          {CATEGORIES.map(
+            (item) => (
+              <button
+                key={item}
+                type="button"
+                className={
+                  category === item
+                    ? "template-category active"
+                    : "template-category"
+                }
+                onClick={() =>
+                  setCategory(item)
+                }
+              >
+                {item}
+              </button>
+            )
+          )}
 
         </div>
 
       </section>
 
-
-      {/* CONTENT */}
+      {/* ==================================================
+          CONTENT
+      ================================================== */}
 
       <main className="templates-content">
 
@@ -2638,12 +2907,15 @@ function Templates() {
 
         </div>
 
+        {/* EMPTY STATE */}
 
         {filteredTemplates.length === 0 ? (
 
           <div className="templates-empty">
 
-            <div>🔍</div>
+            <div>
+              🔍
+            </div>
 
             <h3>
               No templates found
@@ -2667,100 +2939,110 @@ function Templates() {
 
         ) : (
 
+          /* ==================================================
+             TEMPLATE GRID
+          ================================================== */
+
           <div className="templates-grid">
 
-            {filteredTemplates.map((template) => (
+            {filteredTemplates.map(
+              (template) => (
 
-              <article
-                className="template-card"
-                key={template.id}
-              >
+                <article
+                  className="template-card"
+                  key={template.id}
+                >
 
-                {/* PREVIEW */}
+                  {/* PREVIEW */}
 
-                <div className="template-preview">
+                  <div className="template-preview">
 
-                  <div className="template-preview-top">
-
-                    <span>
-                      WebAI
-                    </span>
-
-                    <div>
-                      <i />
-                      <i />
-                      <i />
-                    </div>
-
-                  </div>
-
-                  <div className="template-preview-body">
-
-                    <div className="template-preview-orb">
-                      {template.icon}
-                    </div>
-
-                    <div className="template-preview-line large" />
-                    <div className="template-preview-line" />
-                    <div className="template-preview-line short" />
-
-                    <div className="template-preview-blocks">
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-
-                  </div>
-
-                </div>
-
-
-                {/* INFO */}
-
-                <div className="template-card-info">
-
-                  <div className="template-card-title">
-
-                    <div className="template-icon">
-                      {template.icon}
-                    </div>
-
-                    <div>
-                      <h3>
-                        {template.name}
-                      </h3>
+                    <div className="template-preview-top">
 
                       <span>
-                        {template.category}
+                        WebAI
                       </span>
+
+                      <div>
+                        <i />
+                        <i />
+                        <i />
+                      </div>
+
+                    </div>
+
+                    <div className="template-preview-body">
+
+                      <div className="template-preview-orb">
+                        {template.icon}
+                      </div>
+
+                      <div className="template-preview-line large" />
+
+                      <div className="template-preview-line" />
+
+                      <div className="template-preview-line short" />
+
+                      <div className="template-preview-blocks">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+
                     </div>
 
                   </div>
 
-                  <p>
-                    {template.description}
-                  </p>
+                  {/* INFO */}
 
-                  <button
-                    type="button"
-                    className="use-template-btn"
-                    disabled={
-                      usingTemplate !== null
-                    }
-                    onClick={() =>
-                      handleUseTemplate(template)
-                    }
-                  >
-                    {usingTemplate === template.id
-                      ? "Creating Project..."
-                      : "Use Template →"}
-                  </button>
+                  <div className="template-card-info">
 
-                </div>
+                    <div className="template-card-title">
 
-              </article>
+                      <div className="template-icon">
+                        {template.icon}
+                      </div>
 
-            ))}
+                      <div>
+                        <h3>
+                          {template.name}
+                        </h3>
+
+                        <span>
+                          {template.category}
+                        </span>
+                      </div>
+
+                    </div>
+
+                    <p>
+                      {template.description}
+                    </p>
+
+                    <button
+                      type="button"
+                      className="use-template-btn"
+                      disabled={
+                        usingTemplate !== null
+                      }
+                      onClick={() =>
+                        handleUseTemplate(
+                          template
+                        )
+                      }
+                    >
+                      {usingTemplate ===
+                      template.id
+                        ? "Creating Project..."
+                        : "Use Template →"}
+                    </button>
+
+                  </div>
+
+                </article>
+
+              )
+            )}
 
           </div>
 
