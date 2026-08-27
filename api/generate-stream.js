@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
+import { createClient } from "@supabase/supabase-js";
 
-const MODEL =
-  "gemini-3-flash-preview";
+const MODEL = "gemini-3-flash-preview";
 
 const MAX_PROMPT_LENGTH = 12000;
 const MAX_CODE_LENGTH = 70000;
@@ -11,7 +11,6 @@ const SYSTEM_PROMPT = `
 You are the core AI engine of a premium AI Website Builder.
 
 Act as:
-
 - Senior frontend engineer
 - UI/UX designer
 - Product designer
@@ -20,15 +19,19 @@ Act as:
 - JavaScript engineer
 
 Generate production-quality websites using ONLY:
-
 HTML
 CSS
 Vanilla JavaScript
 
 ==================================================
+UPLOADED FILES & ASSETS
+==================================================
+If the user has uploaded images or files to the project, their secure signed URLs will be listed below. 
+You MUST utilize these exact image URLs if the user requests them or if they fit the website context (e.g. products, logos, backgrounds).
+
+==================================================
 STREAM OUTPUT FORMAT
 ==================================================
-
 Return ONLY:
 
 <WEB_HTML>
@@ -43,148 +46,11 @@ CSS
 JAVASCRIPT
 </WEB_JS>
 
-Never use Markdown.
-Never use triple backticks.
-Never include explanations.
-
-HTML must ONLY contain body content.
-
-Never include:
-
-<html>
-<head>
-<body>
-<style>
-<script>
-
-==================================================
-DESIGN
-==================================================
-
-Create a premium, modern and intentionally designed website.
-
-Use:
-
-- strong typography
-- spacing system
-- color system
-- hierarchy
-- responsive layouts
-- cards when appropriate
-- shadows
-- borders
-- transitions
-- hover states
-- focus states
-
-Match the requested style.
-
-Do not blindly use gradients or glassmorphism.
-
-==================================================
-RESPONSIVE
-==================================================
-
-Desktop
-Tablet
-Mobile
-
-Use Grid, Flexbox, CSS variables and media queries.
-
-Avoid horizontal overflow.
-
-Mobile navigation must work.
-
-==================================================
-JAVASCRIPT
-==================================================
-
-Use vanilla JavaScript only.
-
-Implement real functionality when appropriate:
-
-mobile menu
-tabs
-FAQ
-modal
-filters
-theme toggle
-forms
-counters
-interactive controls
-smooth navigation
-
-Never reference missing DOM elements.
-
-If JavaScript is unnecessary return empty WEB_JS.
-
-==================================================
-ACCESSIBILITY
-==================================================
-
-Use semantic HTML.
-
-Use accessible buttons.
-
-Use aria attributes where appropriate.
-
-Use meaningful alt text.
-
-Provide visible focus states.
-
-==================================================
-EXISTING CODE
-==================================================
-
-If existing code is supplied:
-
-understand it first.
-
-Preserve working features.
-
-Modify only what the user requests when possible.
-
-Fix obvious issues.
-
-Return COMPLETE updated HTML/CSS/JS.
-
-==================================================
-SECURITY
-==================================================
-
-Never generate:
-
-API keys
-password theft
-credential harvesting
-malware
-destructive scripts
-secret tokens
-data theft
-
-==================================================
-QUALITY
-==================================================
-
-Internally verify:
-
-HTML matches CSS.
-CSS matches HTML.
-JavaScript matches HTML.
-Buttons work.
-Navigation works.
-Mobile works.
-No horizontal overflow.
-No broken references.
-
-Then output ONLY the three WEB sections.
+Never use Markdown, triple backticks, or explanations. HTML must only contain body contents without wrapper tags.
 `;
 
 function sleep(ms) {
-  return new Promise(
-    (resolve) =>
-      setTimeout(resolve, ms)
-  );
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function clean(value = "") {
@@ -197,232 +63,134 @@ function clean(value = "") {
     .replace(/```/g, "");
 }
 
-function extract(
-  text,
-  start,
-  end
-) {
-  const startIndex =
-    text.indexOf(start);
+function extract(text, start, end) {
+  const startIndex = text.indexOf(start);
+  if (startIndex === -1) return { content: "", complete: false };
 
-  if (
-    startIndex === -1
-  ) {
-    return null;
-  }
-
-  const contentStart =
-    startIndex + start.length;
-
-  const endIndex =
-    text.indexOf(
-      end,
-      contentStart
-    );
+  const contentStart = startIndex + start.length;
+  const endIndex = text.indexOf(end, contentStart);
 
   return {
-    content:
-      endIndex === -1
-        ? text.slice(
-            contentStart
-          )
-        : text.slice(
-            contentStart,
-            endIndex
-          ),
-
-    complete:
-      endIndex !== -1,
+    content: endIndex === -1 ? text.slice(contentStart) : text.slice(contentStart, endIndex),
+    complete: endIndex !== -1,
   };
 }
 
 function statusOf(error) {
-  return (
-    error?.status ||
-    error?.response?.status ||
-    error?.statusCode ||
-    500
-  );
+  return error?.status || error?.response?.status || error?.statusCode || 500;
 }
 
 function shouldRetry(error) {
-  return [
-    408,
-    409,
-    429,
-    500,
-    502,
-    503,
-    504,
-  ].includes(
-    statusOf(error)
-  );
+  return [408, 409, 429, 500, 502, 503, 504].includes(statusOf(error));
 }
 
-function sendEvent(
-  res,
-  event,
-  data
-) {
+function sendEvent(res, event, data) {
   try {
-    res.write(
-      `event: ${event}\n` +
-      `data: ${JSON.stringify(
-        data
-      )}\n\n`
-    );
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   } catch {
-    // Client disconnected.
+    // Client disconnected
   }
 }
 
 function existingCode(body) {
-  const code =
-    body?.currentCode || {};
-
+  const code = body?.currentCode || {};
   return {
-    html:
-      typeof code.html ===
-      "string"
-        ? code.html.slice(
-            0,
-            MAX_CODE_LENGTH
-          )
-        : "",
-
-    css:
-      typeof code.css ===
-      "string"
-        ? code.css.slice(
-            0,
-            MAX_CODE_LENGTH
-          )
-        : "",
-
-    js:
-      typeof code.js ===
-      "string"
-        ? code.js.slice(
-            0,
-            MAX_CODE_LENGTH
-          )
-        : "",
+    html: typeof code.html === "string" ? code.html.slice(0, MAX_CODE_LENGTH) : "",
+    css: typeof code.css === "string" ? code.css.slice(0, MAX_CODE_LENGTH) : "",
+    js: typeof code.js === "string" ? code.js.slice(0, MAX_CODE_LENGTH) : "",
   };
 }
 
-export default async function handler(
-  req,
-  res
-) {
-  if (
-    req.method !== "POST"
-  ) {
-    return res.status(405).json({
-      success: false,
-      error:
-        "Method not allowed.",
-    });
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ success: false, error: "Method not allowed." });
   }
 
-  const apiKey =
-    process.env.GEMINI_API_KEY;
-
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({
-      success: false,
-      error:
-        "GEMINI_API_KEY is not configured.",
-    });
+    return res.status(500).json({ success: false, error: "GEMINI_API_KEY is not configured." });
   }
 
-  const body =
-    req.body || {};
-
-  const mode =
-    body?.mode === "edit"
-      ? "edit"
-      : "generate";
-
-  const prompt =
-    typeof body.prompt ===
-    "string"
-      ? body.prompt.trim()
-      : "";
+  const body = req.body || {};
+  const mode = body?.mode === "edit" ? "edit" : "generate";
+  const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+  const projectId = body?.projectId;
 
   if (!prompt) {
-    return res.status(400).json({
-      success: false,
-      error:
-        "Please enter a website request.",
-    });
+    return res.status(400).json({ success: false, error: "Please enter a website request." });
   }
 
-  if (
-    prompt.length >
-    MAX_PROMPT_LENGTH
-  ) {
-    return res.status(400).json({
-      success: false,
-      error:
-        "Prompt is too long.",
-    });
-  }
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
 
-  res.setHeader(
-    "Content-Type",
-    "text/event-stream; charset=utf-8"
-  );
-
-  res.setHeader(
-    "Cache-Control",
-    "no-cache, no-transform"
-  );
-
-  res.setHeader(
-    "Connection",
-    "keep-alive"
-  );
-
-  res.setHeader(
-    "X-Accel-Buffering",
-    "no"
-  );
-
-  if (
-    typeof res.flushHeaders ===
-    "function"
-  ) {
+  if (typeof res.flushHeaders === "function") {
     res.flushHeaders();
   }
 
-  const code =
-    existingCode(body);
+  /* ========================================================
+     FETCH PROJECT FILES & SIGNED URLS FOR STREAMING AI
+  ======================================================== */
+  let fileContext = "";
+  if (projectId) {
+    try {
+      const supabaseAdmin = createClient(
+        process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+      );
 
-  const hasExisting =
-    Boolean(
-      code.html ||
-      code.css ||
-      code.js
-    );
+      const { data: dbFiles } = await supabaseAdmin
+        .from("project_files")
+        .select("*")
+        .eq("project_id", projectId);
 
-  let existingContext =
-    "";
+      if (dbFiles && dbFiles.length > 0) {
+        const fileDetails = [];
+        for (const file of dbFiles) {
+          const { data: signedData } = await supabaseAdmin.storage
+            .from("uploads")
+            .createSignedUrl(file.file_path, 7200);
+
+          if (signedData?.signedUrl) {
+            fileDetails.push(
+              `- Name: ${file.file_name}\n  Type: ${file.file_type}\n  URL: ${signedData.signedUrl}`
+            );
+          }
+        }
+
+        if (fileDetails.length > 0) {
+          fileContext = `
+==================================================
+PROJECT UPLOADED FILES & ASSETS
+==================================================
+The user has uploaded these files. Embed these URLs directly where images/files are needed in the layout:
+${fileDetails.join("\n")}
+`;
+        }
+      }
+    } catch (err) {
+      console.error("Stream file context error:", err);
+    }
+  }
+
+  const code = existingCode(body);
+  const hasExisting = Boolean(code.html || code.css || code.js);
 
   if (mode === "edit" && !hasExisting) {
     sendEvent(res, "error", {
-      message:
-        "There is no existing website to edit. Generate a website first.",
+      message: "There is no existing website to edit. Generate a website first.",
       status: 400,
     });
     return res.end();
   }
 
+  let existingContext = "";
   if (hasExisting) {
     existingContext = `
 ==================================================
 EXISTING WEBSITE
 ==================================================
-
 HTML:
 ${code.html}
 
@@ -431,14 +199,6 @@ ${code.css}
 
 JAVASCRIPT:
 ${code.js}
-
-==================================================
-
-EDIT MODE: ${mode === "edit" ? "YES" : "NO"}
-
-${mode === "edit"
-  ? "Treat the existing website as the source of truth. Apply only the user's requested changes while preserving unrelated sections, interactions, layout, and working functionality. Do not rebuild unrelated parts. Return the COMPLETE updated website."
-  : "Preserve useful existing functionality and structure unless the user's request requires changes. Return the COMPLETE updated website."}
 `;
   }
 
@@ -446,517 +206,153 @@ ${mode === "edit"
 TASK MODE: ${mode === "edit" ? "EDIT EXISTING WEBSITE" : "CREATE / GENERATE WEBSITE"}
 
 USER REQUEST:
-
 ${prompt}
 
+${fileContext}
 ${existingContext}
 `;
 
-  const ai =
-    new GoogleGenAI({
-      apiKey,
-    });
+  const ai = new GoogleGenAI({ apiKey });
 
-  sendEvent(
-    res,
-    "status",
-    {
-      stage: "thinking",
-
-      message:
-        mode === "edit"
-          ? "Understanding your existing website..."
-          : "Understanding your idea...",
-    }
-  );
+  sendEvent(res, "status", {
+    stage: "thinking",
+    message: mode === "edit" ? "Understanding your existing website..." : "Understanding your idea...",
+  });
 
   let stream = null;
-
   let lastError = null;
 
-  /*
-  ========================================================
-  CONNECT WITH GEMINI
-  ========================================================
-  */
-
-  for (
-    let attempt = 0;
-    attempt <= MAX_RETRIES;
-    attempt++
-  ) {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      if (
-        attempt > 0
-      ) {
-        sendEvent(
-          res,
-          "status",
-          {
-            stage:
-              "retrying",
-
-            message:
-              "Retrying Gemini connection...",
-
-            attempt,
-          }
-        );
-
-        await sleep(
-          Math.min(
-            1000 *
-              Math.pow(
-                2,
-                attempt - 1
-              ),
-            4000
-          )
-        );
+      if (attempt > 0) {
+        sendEvent(res, "status", {
+          stage: "retrying",
+          message: "Retrying Gemini connection...",
+          attempt,
+        });
+        await sleep(Math.min(1000 * Math.pow(2, attempt - 1), 4000));
       }
 
-      sendEvent(
-        res,
-        "status",
-        {
-          stage:
-            "connecting",
+      sendEvent(res, "status", {
+        stage: "connecting",
+        message: "Connecting to Gemini AI...",
+        model: MODEL,
+      });
 
-          message:
-            "Connecting to Gemini AI...",
-
-          model: MODEL,
-        }
-      );
-
-      stream =
-        await ai.models.generateContentStream(
-          {
-            model: MODEL,
-
-            contents: input,
-
-            config: {
-              systemInstruction:
-                SYSTEM_PROMPT,
-
-              maxOutputTokens:
-                30000,
-            },
-          }
-        );
-
-      console.log(
-        `[AI] Connected to ${MODEL}`
-      );
-
+      stream = await ai.models.generateContentStream({
+        model: MODEL,
+        contents: input,
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          maxOutputTokens: 30000,
+        },
+      });
       break;
     } catch (error) {
       lastError = error;
-
-      console.error(
-        `[AI] Gemini attempt ${
-          attempt + 1
-        } failed`,
-        error
-      );
-
-      if (
-        !shouldRetry(error)
-      ) {
-        break;
-      }
+      if (!shouldRetry(error)) break;
     }
   }
 
   if (!stream) {
-    const status =
-      statusOf(lastError);
-
-    let message =
-      "Gemini generation failed.";
-
-    if (
-      status === 429
-    ) {
-      message =
-        "Gemini rate limit reached. Please wait a moment.";
-    } else if (
-      status === 502 ||
-      status === 503 ||
-      status === 504
-    ) {
-      message =
-        "Gemini service is temporarily busy. Please try again.";
-    } else if (
-      status === 401
-    ) {
-      message =
-        "Gemini API key is invalid.";
-    }
-
-    sendEvent(
-      res,
-      "error",
-      {
-        message,
-        status,
-      }
-    );
-
+    sendEvent(res, "error", {
+      message: lastError?.message || "Gemini generation failed.",
+      status: statusOf(lastError),
+    });
     return res.end();
   }
 
-  /*
-  ========================================================
-  STREAM GENERATION
-  ========================================================
-  */
-
   let fullText = "";
-
   let htmlSent = 0;
-
   let cssSent = 0;
-
   let jsSent = 0;
+  let stage = "generating";
 
-  let stage =
-    "generating";
-
-  sendEvent(
-    res,
-    "status",
-    {
-      stage,
-
-      message:
-        "Gemini is generating your website...",
-
-      model: MODEL,
-    }
-  );
+  sendEvent(res, "status", {
+    stage,
+    message: "Gemini is generating your website with your files...",
+    model: MODEL,
+  });
 
   try {
-    for await (
-      const chunk of stream
-    ) {
-      const delta =
-        chunk?.text || "";
-
-      if (!delta) {
-        continue;
-      }
-
+    for await (const chunk of stream) {
+      const delta = chunk?.text || "";
+      if (!delta) continue;
       fullText += delta;
 
-      /*
-      ------------------------------------------
-      HTML
-      ------------------------------------------
-      */
-
-      const htmlPart =
-        extract(
-          fullText,
-          "<WEB_HTML>",
-          "</WEB_HTML>"
-        );
-
-      if (
-        htmlPart &&
-        htmlPart.content
-      ) {
-        const html =
-          clean(
-            htmlPart.content
-          );
-
-        if (
-          html.length >
-          htmlSent
-        ) {
-          const newDelta =
-            html.slice(
-              htmlSent
-            );
-
-          htmlSent =
-            html.length;
-
-          if (
-            stage !== "html"
-          ) {
+      // HTML Part
+      const htmlPart = extract(fullText, "<WEB_HTML>", "</WEB_HTML>");
+      if (htmlPart && htmlPart.content) {
+        const html = clean(htmlPart.content);
+        if (html.length > htmlSent) {
+          const newDelta = html.slice(htmlSent);
+          htmlSent = html.length;
+          if (stage !== "html") {
             stage = "html";
-
-            sendEvent(
-              res,
-              "status",
-              {
-                stage:
-                  "html",
-
-                message:
-                  "Writing HTML...",
-              }
-            );
+            sendEvent(res, "status", { stage: "html", message: "Writing HTML..." });
           }
-
-          sendEvent(
-            res,
-            "code",
-            {
-              type:
-                "html",
-
-              delta:
-                newDelta,
-
-              value:
-                html,
-
-              complete:
-                htmlPart.complete,
-            }
-          );
+          sendEvent(res, "code", { type: "html", delta: newDelta, value: html, complete: htmlPart.complete });
         }
       }
 
-      /*
-      ------------------------------------------
-      CSS
-      ------------------------------------------
-      */
-
-      const cssPart =
-        extract(
-          fullText,
-          "<WEB_CSS>",
-          "</WEB_CSS>"
-        );
-
-      if (
-        cssPart &&
-        cssPart.content
-      ) {
-        const css =
-          clean(
-            cssPart.content
-          );
-
-        if (
-          css.length >
-          cssSent
-        ) {
-          const newDelta =
-            css.slice(
-              cssSent
-            );
-
-          cssSent =
-            css.length;
-
-          if (
-            stage !== "css"
-          ) {
+      // CSS Part
+      const cssPart = extract(fullText, "<WEB_CSS>", "</WEB_CSS>");
+      if (cssPart && cssPart.content) {
+        const css = clean(cssPart.content);
+        if (css.length > cssSent) {
+          const newDelta = css.slice(cssSent);
+          cssSent = css.length;
+          if (stage !== "css") {
             stage = "css";
-
-            sendEvent(
-              res,
-              "status",
-              {
-                stage:
-                  "css",
-
-                message:
-                  "Designing CSS...",
-              }
-            );
+            sendEvent(res, "status", { stage: "css", message: "Designing CSS..." });
           }
-
-          sendEvent(
-            res,
-            "code",
-            {
-              type:
-                "css",
-
-              delta:
-                newDelta,
-
-              value:
-                css,
-
-              complete:
-                cssPart.complete,
-            }
-          );
+          sendEvent(res, "code", { type: "css", delta: newDelta, value: css, complete: cssPart.complete });
         }
       }
 
-      /*
-      ------------------------------------------
-      JAVASCRIPT
-      ------------------------------------------
-      */
-
-      const jsPart =
-        extract(
-          fullText,
-          "<WEB_JS>",
-          "</WEB_JS>"
-        );
-
-      if (
-        jsPart &&
-        jsPart.content
-      ) {
-        const js =
-          clean(
-            jsPart.content
-          );
-
-        if (
-          js.length >
-          jsSent
-        ) {
-          const newDelta =
-            js.slice(
-              jsSent
-            );
-
-          jsSent =
-            js.length;
-
-          if (
-            stage !== "js"
-          ) {
+      // JS Part
+      const jsPart = extract(fullText, "<WEB_JS>", "</WEB_JS>");
+      if (jsPart && jsPart.content) {
+        const js = clean(jsPart.content);
+        if (js.length > jsSent) {
+          const newDelta = js.slice(jsSent);
+          jsSent = js.length;
+          if (stage !== "js") {
             stage = "js";
-
-            sendEvent(
-              res,
-              "status",
-              {
-                stage:
-                  "js",
-
-                message:
-                  "Adding interactions...",
-              }
-            );
+            sendEvent(res, "status", { stage: "js", message: "Adding interactions..." });
           }
-
-          sendEvent(
-            res,
-            "code",
-            {
-              type:
-                "js",
-
-              delta:
-                newDelta,
-
-              value:
-                js,
-
-              complete:
-                jsPart.complete,
-            }
-          );
+          sendEvent(res, "code", { type: "js", delta: newDelta, value: js, complete: jsPart.complete });
         }
       }
     }
 
-    /*
-    ======================================================
-    FINAL RESULT
-    ======================================================
-    */
-
-    const finalHtml =
-      extract(
-        fullText,
-        "<WEB_HTML>",
-        "</WEB_HTML>"
-      )?.content || "";
-
-    const finalCss =
-      extract(
-        fullText,
-        "<WEB_CSS>",
-        "</WEB_CSS>"
-      )?.content || "";
-
-    const finalJs =
-      extract(
-        fullText,
-        "<WEB_JS>",
-        "</WEB_JS>"
-      )?.content || "";
+    const finalHtml = extract(fullText, "<WEB_HTML>", "</WEB_HTML>")?.content || "";
+    const finalCss = extract(fullText, "<WEB_CSS>", "</WEB_CSS>")?.content || "";
+    const finalJs = extract(fullText, "<WEB_JS>", "</WEB_JS>")?.content || "";
 
     const result = {
-      html:
-        clean(
-          finalHtml
-        ).trim(),
-
-      css:
-        clean(
-          finalCss
-        ).trim(),
-
-      js:
-        clean(
-          finalJs
-        ).trim(),
+      html: clean(finalHtml).trim(),
+      css: clean(finalCss).trim(),
+      js: clean(finalJs).trim(),
     };
 
-    if (
-      !result.html &&
-      !result.css &&
-      !result.js
-    ) {
-      throw new Error(
-        "Gemini returned an empty website."
-      );
+    if (!result.html && !result.css && !result.js) {
+      throw new Error("Gemini returned an empty website.");
     }
 
-    sendEvent(
-      res,
-      "complete",
-      {
-        success: true,
-
-        model: MODEL,
-
-        html:
-          result.html,
-
-        css:
-          result.css,
-
-        js:
-          result.js,
-      }
-    );
+    sendEvent(res, "complete", {
+      success: true,
+      model: MODEL,
+      html: result.html,
+      css: result.css,
+      js: result.js,
+    });
 
     return res.end();
   } catch (error) {
-    console.error(
-      "[AI] Gemini streaming error",
-      error
-    );
-
-    sendEvent(
-      res,
-      "error",
-      {
-        message:
-          error?.message ||
-          "Gemini streaming generation failed.",
-      }
-    );
-
+    sendEvent(res, "error", {
+      message: error?.message || "Gemini streaming generation failed.",
+    });
     return res.end();
   }
 }
