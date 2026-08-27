@@ -49,12 +49,18 @@ function Builder() {
   ======================================================== */
 
   const [generating, setGenerating] = useState(false);
-  const [generationStage, setGenerationStage] = useState("");
-  const [generationMessage, setGenerationMessage] = useState("");
-  const [generationModel, setGenerationModel] = useState("");
-  const [generationProgress, setGenerationProgress] = useState(0);
-  const [generationError, setGenerationError] = useState("");
-  const [generationMode, setGenerationMode] = useState("generate");
+  const [generationStage, setGenerationStage] =
+    useState("");
+  const [generationMessage, setGenerationMessage] =
+    useState("");
+  const [generationModel, setGenerationModel] =
+    useState("");
+  const [generationProgress, setGenerationProgress] =
+    useState(0);
+  const [generationError, setGenerationError] =
+    useState("");
+  const [generationMode, setGenerationMode] =
+    useState("generate");
 
   const abortController = useRef(null);
 
@@ -82,14 +88,18 @@ function Builder() {
   ======================================================== */
 
   const [history, setHistory] = useState([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [historyIndex, setHistoryIndex] =
+    useState(-1);
 
   /* ========================================================
      OTHER UI
   ======================================================== */
 
-  const [showSettings, setShowSettings] = useState(false);
-  const [showExport, setShowExport] = useState(false);
+  const [showSettings, setShowSettings] =
+    useState(false);
+
+  const [showExport, setShowExport] =
+    useState(false);
 
   /* ========================================================
      LOAD PROJECT
@@ -139,10 +149,21 @@ function Builder() {
 
         setProject(data);
 
-        setPrompt(data.prompt || "");
-        setHtmlCode(data.html_code || "");
-        setCssCode(data.css_code || "");
-        setJsCode(data.js_code || "");
+        setPrompt(
+          data.prompt || ""
+        );
+
+        setHtmlCode(
+          data.html_code || ""
+        );
+
+        setCssCode(
+          data.css_code || ""
+        );
+
+        setJsCode(
+          data.js_code || ""
+        );
 
         const initialState = {
           html: data.html_code || "",
@@ -150,10 +171,15 @@ function Builder() {
           js: data.js_code || "",
         };
 
-        setHistory([initialState]);
+        setHistory([
+          initialState,
+        ]);
+
         setHistoryIndex(0);
 
-        latestCodeRef.current = initialState;
+        latestCodeRef.current =
+          initialState;
+
         isLoadedRef.current = true;
 
         setLoading(false);
@@ -186,7 +212,11 @@ function Builder() {
       css: cssCode,
       js: jsCode,
     }),
-    [htmlCode, cssCode, jsCode]
+    [
+      htmlCode,
+      cssCode,
+      jsCode,
+    ]
   );
 
   /* ========================================================
@@ -194,7 +224,8 @@ function Builder() {
   ======================================================== */
 
   useEffect(() => {
-    latestCodeRef.current = currentCode;
+    latestCodeRef.current =
+      currentCode;
   }, [currentCode]);
 
   /* ========================================================
@@ -203,29 +234,35 @@ function Builder() {
 
   function pushHistory(nextState) {
     setHistory((previous) => {
-      const currentIndex = Math.max(
-        0,
-        Math.min(
-          historyIndex,
-          previous.length - 1
-        )
-      );
+      const currentIndex =
+        Math.max(
+          0,
+          Math.min(
+            historyIndex,
+            previous.length - 1
+          )
+        );
 
-      const current = previous[currentIndex];
+      const current =
+        previous[currentIndex];
 
       if (
         current &&
-        current.html === nextState.html &&
-        current.css === nextState.css &&
-        current.js === nextState.js
+        current.html ===
+          nextState.html &&
+        current.css ===
+          nextState.css &&
+        current.js ===
+          nextState.js
       ) {
         return previous;
       }
 
-      const trimmed = previous.slice(
-        0,
-        currentIndex + 1
-      );
+      const trimmed =
+        previous.slice(
+          0,
+          currentIndex + 1
+        );
 
       const nextHistory = [
         ...trimmed,
@@ -253,7 +290,8 @@ function Builder() {
       [type]: value,
     };
 
-    latestCodeRef.current = nextState;
+    latestCodeRef.current =
+      nextState;
 
     if (type === "html") {
       setHtmlCode(value);
@@ -270,16 +308,20 @@ function Builder() {
     setSaved(false);
 
     if (historyTimer.current) {
-      clearTimeout(historyTimer.current);
+      clearTimeout(
+        historyTimer.current
+      );
     }
 
-    historyTimer.current = setTimeout(() => {
-      pushHistory({
-        ...latestCodeRef.current,
-      });
+    historyTimer.current =
+      setTimeout(() => {
+        pushHistory({
+          ...latestCodeRef.current,
+        });
 
-      historyTimer.current = null;
-    }, 450);
+        historyTimer.current =
+          null;
+      }, 450);
   }
 
   /* ========================================================
@@ -305,7 +347,8 @@ function Builder() {
     try {
       const {
         data: { user },
-      } = await supabase.auth.getUser();
+      } =
+        await supabase.auth.getUser();
 
       if (!user) {
         throw new Error(
@@ -313,16 +356,25 @@ function Builder() {
         );
       }
 
-      const { error } = await supabase
+      const {
+        error,
+      } = await supabase
         .from("projects")
         .update({
           prompt,
+
           html_code:
-            latestCodeRef.current.html,
+            latestCodeRef.current
+              .html,
+
           css_code:
-            latestCodeRef.current.css,
+            latestCodeRef.current
+              .css,
+
           js_code:
-            latestCodeRef.current.js,
+            latestCodeRef.current
+              .js,
+
           updated_at:
             new Date().toISOString(),
         })
@@ -375,16 +427,15 @@ function Builder() {
       );
     }
 
-    autoSaveTimer.current = setTimeout(
-      () => {
+    autoSaveTimer.current =
+      setTimeout(() => {
         saveProjectData({
           silent: true,
         });
 
-        autoSaveTimer.current = null;
-      },
-      1800
-    );
+        autoSaveTimer.current =
+          null;
+      }, 1800);
 
     return () => {
       if (autoSaveTimer.current) {
@@ -416,6 +467,10 @@ function Builder() {
           historyTimer.current
         );
       }
+
+      if (abortController.current) {
+        abortController.current.abort();
+      }
     };
   }, []);
 
@@ -441,11 +496,20 @@ function Builder() {
 
     if (!previous) return;
 
-    setHtmlCode(previous.html);
-    setCssCode(previous.css);
-    setJsCode(previous.js);
+    setHtmlCode(
+      previous.html
+    );
 
-    latestCodeRef.current = previous;
+    setCssCode(
+      previous.css
+    );
+
+    setJsCode(
+      previous.js
+    );
+
+    latestCodeRef.current =
+      previous;
 
     setHistoryIndex(
       historyIndex - 1
@@ -483,11 +547,20 @@ function Builder() {
 
     if (!next) return;
 
-    setHtmlCode(next.html);
-    setCssCode(next.css);
-    setJsCode(next.js);
+    setHtmlCode(
+      next.html
+    );
 
-    latestCodeRef.current = next;
+    setCssCode(
+      next.css
+    );
+
+    setJsCode(
+      next.js
+    );
+
+    latestCodeRef.current =
+      next;
 
     setHistoryIndex(
       historyIndex + 1
@@ -510,7 +583,8 @@ function Builder() {
         autoSaveTimer.current
       );
 
-      autoSaveTimer.current = null;
+      autoSaveTimer.current =
+        null;
     }
 
     await saveProjectData({
@@ -543,15 +617,20 @@ function Builder() {
 
       for (const line of lines) {
         if (
-          line.startsWith("event:")
+          line.startsWith(
+            "event:"
+          )
         ) {
-          eventName = line
-            .slice(6)
-            .trim();
+          eventName =
+            line
+              .slice(6)
+              .trim();
         }
 
         if (
-          line.startsWith("data:")
+          line.startsWith(
+            "data:"
+          )
         ) {
           data += line
             .slice(5)
@@ -614,7 +693,11 @@ function Builder() {
     }
 
     setGenerating(true);
-    setGenerationMode(mode);
+
+    setGenerationMode(
+      mode
+    );
+
     setGenerationError("");
 
     setGenerationStage(
@@ -628,7 +711,9 @@ function Builder() {
     );
 
     setGenerationModel("");
+
     setGenerationProgress(3);
+
     setActiveMode("code");
 
     if (historyTimer.current) {
@@ -636,7 +721,8 @@ function Builder() {
         historyTimer.current
       );
 
-      historyTimer.current = null;
+      historyTimer.current =
+        null;
     }
 
     if (mode === "generate") {
@@ -673,6 +759,7 @@ function Builder() {
               prompt,
               mode,
               currentCode,
+              projectId,
             }),
 
             signal:
@@ -694,7 +781,9 @@ function Builder() {
             message;
         } catch {}
 
-        throw new Error(message);
+        throw new Error(
+          message
+        );
       }
 
       if (!response.body) {
@@ -707,7 +796,9 @@ function Builder() {
         response.body.getReader();
 
       const decoder =
-        new TextDecoder("utf-8");
+        new TextDecoder(
+          "utf-8"
+        );
 
       let buffer = "";
 
@@ -715,14 +806,18 @@ function Builder() {
       let streamedCSS = "";
       let streamedJS = "";
 
-      let receivedComplete = false;
-      let receivedError = false;
+      let receivedComplete =
+        false;
+
+      let receivedError =
+        false;
 
       while (true) {
         const {
           value,
           done,
-        } = await reader.read();
+        } =
+          await reader.read();
 
         if (done) break;
 
@@ -733,276 +828,301 @@ function Builder() {
           }
         );
 
-        buffer = parseSSEChunk(
-          buffer,
-          (event, data) => {
-            /* STATUS */
-
-            if (event === "status") {
-              setGenerationStage(
-                data.stage || ""
-              );
-
-              setGenerationMessage(
-                data.message ||
-                  "Generating..."
-              );
-
-              if (data.model) {
-                setGenerationModel(
-                  data.model
-                );
-              }
-
-              const progressMap = {
-                thinking: 5,
-                connecting: 10,
-                generating: 15,
-                html: 35,
-                css: 65,
-                js: 85,
-                retrying: 10,
-                complete: 100,
-              };
-
-              const progress =
-                progressMap[
-                  data.stage
-                ];
+        buffer =
+          parseSSEChunk(
+            buffer,
+            (event, data) => {
+              /* STATUS */
 
               if (
-                progress !==
-                undefined
+                event ===
+                "status"
               ) {
-                setGenerationProgress(
-                  progress
-                );
-              }
-            }
-
-            /* CODE */
-
-            if (event === "code") {
-              if (
-                data.type === "html"
-              ) {
-                streamedHTML =
-                  data.value ||
-                  streamedHTML;
-
-                latestCodeRef.current =
-                  {
-                    ...latestCodeRef.current,
-                    html:
-                      streamedHTML,
-                  };
-
-                setHtmlCode(
-                  streamedHTML
+                setGenerationStage(
+                  data.stage || ""
                 );
 
-                setGenerationProgress(
-                  Math.min(
-                    60,
-                    15 +
-                      Math.floor(
-                        streamedHTML
-                          .length /
-                          150
-                      )
-                  )
-                );
-              }
-
-              if (
-                data.type === "css"
-              ) {
-                streamedCSS =
-                  data.value ||
-                  streamedCSS;
-
-                latestCodeRef.current =
-                  {
-                    ...latestCodeRef.current,
-                    css:
-                      streamedCSS,
-                  };
-
-                setCssCode(
-                  streamedCSS
+                setGenerationMessage(
+                  data.message ||
+                    "Generating..."
                 );
 
-                setGenerationProgress(
-                  Math.min(
-                    85,
-                    55 +
-                      Math.floor(
-                        streamedCSS
-                          .length /
-                          200
-                      )
-                  )
-                );
-              }
+                if (data.model) {
+                  setGenerationModel(
+                    data.model
+                  );
+                }
 
-              if (
-                data.type === "js"
-              ) {
-                streamedJS =
-                  data.value ||
-                  streamedJS;
-
-                latestCodeRef.current =
-                  {
-                    ...latestCodeRef.current,
-                    js:
-                      streamedJS,
-                  };
-
-                setJsCode(
-                  streamedJS
-                );
-
-                setGenerationProgress(
-                  Math.min(
-                    98,
-                    80 +
-                      Math.floor(
-                        streamedJS
-                          .length /
-                          300
-                      )
-                  )
-                );
-              }
-
-              setSaved(false);
-            }
-
-            /* COMPLETE */
-
-            if (event === "complete") {
-              receivedComplete = true;
-
-              const finalHTML =
-                data.html ||
-                streamedHTML;
-
-              const finalCSS =
-                data.css ||
-                streamedCSS;
-
-              const finalJS =
-                data.js ||
-                streamedJS;
-
-              setHtmlCode(
-                finalHTML
-              );
-
-              setCssCode(
-                finalCSS
-              );
-
-              setJsCode(
-                finalJS
-              );
-
-              latestCodeRef.current =
-                {
-                  html: finalHTML,
-                  css: finalCSS,
-                  js: finalJS,
+                const progressMap = {
+                  thinking: 5,
+                  connecting: 10,
+                  generating: 15,
+                  html: 35,
+                  css: 65,
+                  js: 85,
+                  retrying: 10,
+                  complete: 100,
                 };
 
-              setGenerationProgress(
-                100
-              );
+                const progress =
+                  progressMap[
+                    data.stage
+                  ];
 
-              setGenerationStage(
+                if (
+                  progress !==
+                  undefined
+                ) {
+                  setGenerationProgress(
+                    progress
+                  );
+                }
+              }
+
+              /* CODE */
+
+              if (
+                event ===
+                "code"
+              ) {
+                if (
+                  data.type ===
+                  "html"
+                ) {
+                  streamedHTML =
+                    data.value ||
+                    streamedHTML;
+
+                  latestCodeRef.current =
+                    {
+                      ...latestCodeRef.current,
+                      html:
+                        streamedHTML,
+                    };
+
+                  setHtmlCode(
+                    streamedHTML
+                  );
+
+                  setGenerationProgress(
+                    Math.min(
+                      60,
+                      15 +
+                        Math.floor(
+                          streamedHTML
+                            .length /
+                            150
+                        )
+                    )
+                  );
+                }
+
+                if (
+                  data.type ===
+                  "css"
+                ) {
+                  streamedCSS =
+                    data.value ||
+                    streamedCSS;
+
+                  latestCodeRef.current =
+                    {
+                      ...latestCodeRef.current,
+                      css:
+                        streamedCSS,
+                    };
+
+                  setCssCode(
+                    streamedCSS
+                  );
+
+                  setGenerationProgress(
+                    Math.min(
+                      85,
+                      55 +
+                        Math.floor(
+                          streamedCSS
+                            .length /
+                            200
+                        )
+                    )
+                  );
+                }
+
+                if (
+                  data.type ===
+                  "js"
+                ) {
+                  streamedJS =
+                    data.value ||
+                    streamedJS;
+
+                  latestCodeRef.current =
+                    {
+                      ...latestCodeRef.current,
+                      js:
+                        streamedJS,
+                    };
+
+                  setJsCode(
+                    streamedJS
+                  );
+
+                  setGenerationProgress(
+                    Math.min(
+                      98,
+                      80 +
+                        Math.floor(
+                          streamedJS
+                            .length /
+                            300
+                        )
+                    )
+                  );
+                }
+
+                setSaved(false);
+              }
+
+              /* COMPLETE */
+
+              if (
+                event ===
                 "complete"
-              );
+              ) {
+                receivedComplete =
+                  true;
 
-              setGenerationMessage(
-                mode === "edit"
-                  ? "Website updated successfully."
-                  : "Website generated successfully."
-              );
+                const finalHTML =
+                  data.html ||
+                  streamedHTML;
 
-              if (data.model) {
-                setGenerationModel(
-                  data.model
+                const finalCSS =
+                  data.css ||
+                  streamedCSS;
+
+                const finalJS =
+                  data.js ||
+                  streamedJS;
+
+                setHtmlCode(
+                  finalHTML
+                );
+
+                setCssCode(
+                  finalCSS
+                );
+
+                setJsCode(
+                  finalJS
+                );
+
+                latestCodeRef.current =
+                  {
+                    html:
+                      finalHTML,
+                    css:
+                      finalCSS,
+                    js:
+                      finalJS,
+                  };
+
+                setGenerationProgress(
+                  100
+                );
+
+                setGenerationStage(
+                  "complete"
+                );
+
+                setGenerationMessage(
+                  mode === "edit"
+                    ? "Website updated successfully."
+                    : "Website generated successfully."
+                );
+
+                if (data.model) {
+                  setGenerationModel(
+                    data.model
+                  );
+                }
+
+                const finalState = {
+                  html:
+                    finalHTML,
+                  css:
+                    finalCSS,
+                  js:
+                    finalJS,
+                };
+
+                setHistory(
+                  (previous) => {
+                    const current =
+                      previous[
+                        previous.length -
+                          1
+                      ];
+
+                    if (
+                      current &&
+                      current.html ===
+                        finalState.html &&
+                      current.css ===
+                        finalState.css &&
+                      current.js ===
+                        finalState.js
+                    ) {
+                      return previous;
+                    }
+
+                    return [
+                      ...previous,
+                      finalState,
+                    ].slice(-30);
+                  }
+                );
+
+                setHistoryIndex(
+                  (previous) =>
+                    Math.min(
+                      previous + 1,
+                      29
+                    )
+                );
+
+                setSaved(false);
+
+                setPreviewKey(
+                  (value) =>
+                    value + 1
+                );
+
+                setActiveMode(
+                  "preview"
                 );
               }
 
-              const finalState = {
-                html: finalHTML,
-                css: finalCSS,
-                js: finalJS,
-              };
+              /* ERROR */
 
-              setHistory(
-                (previous) => {
-                  const current =
-                    previous[
-                      previous.length -
-                        1
-                    ];
-
-                  if (
-                    current &&
-                    current.html ===
-                      finalState.html &&
-                    current.css ===
-                      finalState.css &&
-                    current.js ===
-                      finalState.js
-                  ) {
-                    return previous;
-                  }
-
-                  return [
-                    ...previous,
-                    finalState,
-                  ].slice(-30);
-                }
-              );
-
-              setHistoryIndex(
-                (previous) =>
-                  Math.min(
-                    previous + 1,
-                    29
-                  )
-              );
-
-              setSaved(false);
-
-              setPreviewKey(
-                (value) => value + 1
-              );
-
-              setActiveMode(
-                "preview"
-              );
-            }
-
-            /* ERROR */
-
-            if (event === "error") {
-              receivedError = true;
-
-              setGenerationError(
-                data.message ||
-                  "AI generation failed."
-              );
-
-              setGenerationStage(
+              if (
+                event ===
                 "error"
-              );
+              ) {
+                receivedError =
+                  true;
+
+                setGenerationError(
+                  data.message ||
+                    "AI generation failed."
+                );
+
+                setGenerationStage(
+                  "error"
+                );
+              }
             }
-          }
-        );
+          );
       }
 
       /* FALLBACK */
@@ -1028,11 +1148,15 @@ function Builder() {
           streamedJS
         );
 
-        latestCodeRef.current = {
-          html: streamedHTML,
-          css: streamedCSS,
-          js: streamedJS,
-        };
+        latestCodeRef.current =
+          {
+            html:
+              streamedHTML,
+            css:
+              streamedCSS,
+            js:
+              streamedJS,
+          };
 
         setGenerationStage(
           "complete"
@@ -1055,7 +1179,8 @@ function Builder() {
         setSaved(false);
 
         setPreviewKey(
-          (value) => value + 1
+          (value) =>
+            value + 1
         );
       }
     } catch (error) {
@@ -1087,7 +1212,9 @@ function Builder() {
       }
     } finally {
       setGenerating(false);
-      abortController.current = null;
+
+      abortController.current =
+        null;
     }
   }
 
@@ -1191,7 +1318,8 @@ console.error(
     if (!project) return;
 
     try {
-      const zip = new JSZip();
+      const zip =
+        new JSZip();
 
       const html = `
 <!DOCTYPE html>
@@ -1206,10 +1334,9 @@ console.error(
   content="width=device-width, initial-scale=1.0"
 >
 
-<title>${
-        project.name ||
-        "My Website"
-      }</title>
+<title>
+${project.name || "My Website"}
+</title>
 
 <link
   rel="stylesheet"
@@ -1245,9 +1372,11 @@ ${htmlCode}
       );
 
       const blob =
-        await zip.generateAsync({
-          type: "blob",
-        });
+        await zip.generateAsync(
+          {
+            type: "blob",
+          }
+        );
 
       const url =
         URL.createObjectURL(
@@ -1261,10 +1390,11 @@ ${htmlCode}
 
       link.href = url;
 
-      link.download = `${
-        project.name ||
-        "website"
-      }.zip`;
+      link.download =
+        `${
+          project.name ||
+          "website"
+        }.zip`;
 
       document.body.appendChild(
         link
@@ -1274,13 +1404,11 @@ ${htmlCode}
 
       link.remove();
 
-      setTimeout(
-        () =>
-          URL.revokeObjectURL(
-            url
-          ),
-        1000
-      );
+      setTimeout(() => {
+        URL.revokeObjectURL(
+          url
+        );
+      }, 1000);
     } catch (error) {
       console.error(
         "ZIP export error:",
@@ -1315,10 +1443,9 @@ ${htmlCode}
   content="width=device-width, initial-scale=1.0"
 >
 
-<title>${
-      project.name ||
-      "My Website"
-    }</title>
+<title>
+${project.name || "My Website"}
+</title>
 
 <link
   rel="stylesheet"
@@ -1369,10 +1496,11 @@ ${jsCode}
 
     link.href = url;
 
-    link.download = `${
-      project.name ||
-      "website"
-    }-code.txt`;
+    link.download =
+      `${
+        project.name ||
+        "website"
+      }-code.txt`;
 
     document.body.appendChild(
       link
@@ -1382,13 +1510,11 @@ ${jsCode}
 
     link.remove();
 
-    setTimeout(
-      () =>
-        URL.revokeObjectURL(
-          url
-        ),
-      1000
-    );
+    setTimeout(() => {
+      URL.revokeObjectURL(
+        url
+      );
+    }, 1000);
   }
 
   /* ========================================================
@@ -1463,7 +1589,9 @@ ${jsCode}
       }`}
     >
 
-      {/* TOP BAR */}
+      {/* ==================================================
+          TOP BAR
+      ================================================== */}
 
       <header className="builder-topbar">
 
@@ -1631,7 +1759,9 @@ ${jsCode}
 
       </header>
 
-      {/* EXPORT MENU */}
+      {/* ==================================================
+          EXPORT MENU
+      ================================================== */}
 
       {showExport && (
         <div className="export-menu">
@@ -1675,11 +1805,15 @@ ${jsCode}
         </div>
       )}
 
-      {/* WORKSPACE */}
+      {/* ==================================================
+          WORKSPACE
+      ================================================== */}
 
       <main className="builder-workspace">
 
-        {/* AI SIDEBAR */}
+        {/* ==================================================
+            AI SIDEBAR
+        ================================================== */}
 
         <aside className="builder-left">
 
@@ -1753,7 +1887,10 @@ ${jsCode}
                   )
                 }
               >
-                <span>✦</span>
+                <span>
+                  ✦
+                </span>
+
                 Generate Website
               </button>
 
@@ -1771,7 +1908,10 @@ ${jsCode}
                 }
                 title="Edit the existing website with AI"
               >
-                <span>✎</span>
+                <span>
+                  ✎
+                </span>
+
                 Edit Existing Website
               </button>
             </>
@@ -1782,7 +1922,10 @@ ${jsCode}
                 handleCancelGeneration
               }
             >
-              <span>■</span>
+              <span>
+                ■
+              </span>
+
               Stop Generation
             </button>
           )}
@@ -1909,7 +2052,7 @@ ${jsCode}
           </div>
 
           {/* ==================================================
-              FILE UPLOAD
+              PROJECT FILES
           ================================================== */}
 
           <div className="file-upload-section">
@@ -1934,7 +2077,15 @@ ${jsCode}
 
             </div>
 
-            <FileUpload />
+            {/* IMPORTANT:
+                projectId is passed here
+            */}
+
+            <FileUpload
+              projectId={
+                projectId
+              }
+            />
 
           </div>
 
@@ -1968,7 +2119,9 @@ ${jsCode}
 
         </aside>
 
-        {/* CODE EDITOR */}
+        {/* ==================================================
+            CODE EDITOR
+        ================================================== */}
 
         {activeMode ===
           "code" && (
@@ -2062,18 +2215,17 @@ ${jsCode}
 
                 {Array.from(
                   {
-                    length:
-                      (
-                        activeTab ===
-                        "html"
-                          ? htmlCode
-                          : activeTab ===
-                            "css"
-                          ? cssCode
-                          : jsCode
-                      ).split(
-                        "\n"
-                      ).length,
+                    length: (
+                      activeTab ===
+                      "html"
+                        ? htmlCode
+                        : activeTab ===
+                          "css"
+                        ? cssCode
+                        : jsCode
+                    ).split(
+                      "\n"
+                    ).length,
                   },
                   (_, index) => (
                     <span
@@ -2171,7 +2323,9 @@ ${jsCode}
           </section>
         )}
 
-        {/* PREVIEW */}
+        {/* ==================================================
+            PREVIEW
+        ================================================== */}
 
         {activeMode ===
           "preview" && (
@@ -2313,7 +2467,9 @@ ${jsCode}
 
       </main>
 
-      {/* SETTINGS */}
+      {/* ==================================================
+          SETTINGS
+      ================================================== */}
 
       {showSettings && (
         <div
