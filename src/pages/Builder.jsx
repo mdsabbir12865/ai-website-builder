@@ -11,151 +11,89 @@ import {
 } from "react-router-dom";
 
 import { supabase } from "../lib/supabase";
-
 import JSZip from "jszip";
+import FileUpload from "../components/FileUpload";
 
 function Builder() {
   const { projectId } = useParams();
-
   const navigate = useNavigate();
 
-  /*
-  ========================================================
-  PROJECT
-  ========================================================
-  */
+  /* ========================================================
+     PROJECT
+  ======================================================== */
 
-  const [project, setProject] =
-    useState(null);
+  const [project, setProject] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const [loading, setLoading] =
-    useState(true);
+  /* ========================================================
+     CODE
+  ======================================================== */
 
-  /*
-  ========================================================
-  CODE
-  ========================================================
-  */
+  const [prompt, setPrompt] = useState("");
+  const [htmlCode, setHtmlCode] = useState("");
+  const [cssCode, setCssCode] = useState("");
+  const [jsCode, setJsCode] = useState("");
 
-  const [prompt, setPrompt] =
-    useState("");
+  /* ========================================================
+     UI
+  ======================================================== */
 
-  const [htmlCode, setHtmlCode] =
-    useState("");
+  const [activeTab, setActiveTab] = useState("html");
+  const [activeMode, setActiveMode] = useState("code");
+  const [device, setDevice] = useState("desktop");
+  const [fullscreen, setFullscreen] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
 
-  const [cssCode, setCssCode] =
-    useState("");
+  /* ========================================================
+     AI STATE
+  ======================================================== */
 
-  const [jsCode, setJsCode] =
-    useState("");
+  const [generating, setGenerating] = useState(false);
+  const [generationStage, setGenerationStage] = useState("");
+  const [generationMessage, setGenerationMessage] = useState("");
+  const [generationModel, setGenerationModel] = useState("");
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationError, setGenerationError] = useState("");
+  const [generationMode, setGenerationMode] = useState("generate");
 
-  /*
-  ========================================================
-  UI
-  ========================================================
-  */
+  const abortController = useRef(null);
 
-  const [activeTab, setActiveTab] =
-    useState("html");
+  /* ========================================================
+     SAVE
+  ======================================================== */
 
-  const [activeMode, setActiveMode] =
-    useState("code");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(true);
+  const [autoSaving, setAutoSaving] = useState(false);
 
-  const [device, setDevice] =
-    useState("desktop");
+  const autoSaveTimer = useRef(null);
+  const historyTimer = useRef(null);
 
-  const [fullscreen, setFullscreen] =
-    useState(false);
+  const latestCodeRef = useRef({
+    html: "",
+    css: "",
+    js: "",
+  });
 
-  const [previewKey, setPreviewKey] =
-    useState(0);
+  const isLoadedRef = useRef(false);
 
-  /*
-  ========================================================
-  AI STATE
-  ========================================================
-  */
+  /* ========================================================
+     HISTORY
+  ======================================================== */
 
-  const [generating, setGenerating] =
-    useState(false);
+  const [history, setHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
-  const [generationStage, setGenerationStage] =
-    useState("");
+  /* ========================================================
+     OTHER UI
+  ======================================================== */
 
-  const [generationMessage, setGenerationMessage] =
-    useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [showExport, setShowExport] = useState(false);
 
-  const [generationModel, setGenerationModel] =
-    useState("");
-
-  const [generationProgress, setGenerationProgress] =
-    useState(0);
-
-  const [generationError, setGenerationError] =
-    useState("");
-
-  const [generationMode, setGenerationMode] =
-    useState("generate");
-
-  const abortController =
-    useRef(null);
-
-  /*
-  ========================================================
-  SAVE
-  ========================================================
-  */
-
-  const [saving, setSaving] =
-    useState(false);
-
-  const [saved, setSaved] =
-    useState(true);
-
-  const [autoSaving, setAutoSaving] =
-    useState(false);
-
-  const autoSaveTimer =
-    useRef(null);
-
-  const historyTimer =
-    useRef(null);
-
-  const latestCodeRef =
-    useRef({ html: "", css: "", js: "" });
-
-  const isLoadedRef =
-    useRef(false);
-
-  /*
-  ========================================================
-  HISTORY
-  ========================================================
-  */
-
-  const [history, setHistory] =
-    useState([]);
-
-  const [historyIndex, setHistoryIndex] =
-    useState(-1);
-
-  /*
-  ========================================================
-  OTHER UI
-  ========================================================
-  */
-
-  const [showSettings, setShowSettings] =
-    useState(false);
-
-  const [showExport, setShowExport] =
-    useState(false);
-
-  /*
-  ========================================================
-  LOAD PROJECT
-  ========================================================
-  */
+  /* ========================================================
+     LOAD PROJECT
+  ======================================================== */
 
   useEffect(() => {
     let mounted = true;
@@ -164,8 +102,7 @@ function Builder() {
       try {
         const {
           data: { user },
-        } =
-          await supabase.auth.getUser();
+        } = await supabase.auth.getUser();
 
         if (!user) {
           navigate("/login", {
@@ -178,13 +115,12 @@ function Builder() {
         const {
           data,
           error,
-        } =
-          await supabase
-            .from("projects")
-            .select("*")
-            .eq("id", projectId)
-            .eq("user_id", user.id)
-            .single();
+        } = await supabase
+          .from("projects")
+          .select("*")
+          .eq("id", projectId)
+          .eq("user_id", user.id)
+          .single();
 
         if (error) {
           console.error(
@@ -203,38 +139,20 @@ function Builder() {
 
         setProject(data);
 
-        setPrompt(
-          data.prompt || ""
-        );
-
-        setHtmlCode(
-          data.html_code || ""
-        );
-
-        setCssCode(
-          data.css_code || ""
-        );
-
-        setJsCode(
-          data.js_code || ""
-        );
+        setPrompt(data.prompt || "");
+        setHtmlCode(data.html_code || "");
+        setCssCode(data.css_code || "");
+        setJsCode(data.js_code || "");
 
         const initialState = {
-          html:
-            data.html_code || "",
-
-          css:
-            data.css_code || "",
-
-          js:
-            data.js_code || "",
+          html: data.html_code || "",
+          css: data.css_code || "",
+          js: data.js_code || "",
         };
 
-        setHistory([
-          initialState,
-        ]);
-
+        setHistory([initialState]);
         setHistoryIndex(0);
+
         latestCodeRef.current = initialState;
         isLoadedRef.current = true;
 
@@ -256,16 +174,11 @@ function Builder() {
     return () => {
       mounted = false;
     };
-  }, [
-    projectId,
-    navigate,
-  ]);
+  }, [projectId, navigate]);
 
-  /*
-  ========================================================
-  CURRENT CODE
-  ========================================================
-  */
+  /* ========================================================
+     CURRENT CODE
+  ======================================================== */
 
   const currentCode = useMemo(
     () => ({
@@ -273,34 +186,29 @@ function Builder() {
       css: cssCode,
       js: jsCode,
     }),
-    [
-      htmlCode,
-      cssCode,
-      jsCode,
-    ]
+    [htmlCode, cssCode, jsCode]
   );
 
-  /*
-  ========================================================
-  LIVE CODE REF
-  ========================================================
-  */
+  /* ========================================================
+     LIVE CODE REF
+  ======================================================== */
 
   useEffect(() => {
     latestCodeRef.current = currentCode;
   }, [currentCode]);
 
-  /*
-  ========================================================
-  HISTORY
-  ========================================================
-  */
+  /* ========================================================
+     HISTORY
+  ======================================================== */
 
   function pushHistory(nextState) {
     setHistory((previous) => {
       const currentIndex = Math.max(
         0,
-        Math.min(historyIndex, previous.length - 1)
+        Math.min(
+          historyIndex,
+          previous.length - 1
+        )
       );
 
       const current = previous[currentIndex];
@@ -314,10 +222,20 @@ function Builder() {
         return previous;
       }
 
-      const trimmed = previous.slice(0, currentIndex + 1);
-      const nextHistory = [...trimmed, nextState].slice(-30);
+      const trimmed = previous.slice(
+        0,
+        currentIndex + 1
+      );
 
-      setHistoryIndex(nextHistory.length - 1);
+      const nextHistory = [
+        ...trimmed,
+        nextState,
+      ].slice(-30);
+
+      setHistoryIndex(
+        nextHistory.length - 1
+      );
+
       return nextHistory;
     });
   }
@@ -326,7 +244,10 @@ function Builder() {
     setSaved(false);
   }
 
-  function handleManualCodeChange(type, value) {
+  function handleManualCodeChange(
+    type,
+    value
+  ) {
     const nextState = {
       ...latestCodeRef.current,
       [type]: value,
@@ -334,9 +255,17 @@ function Builder() {
 
     latestCodeRef.current = nextState;
 
-    if (type === "html") setHtmlCode(value);
-    if (type === "css") setCssCode(value);
-    if (type === "js") setJsCode(value);
+    if (type === "html") {
+      setHtmlCode(value);
+    }
+
+    if (type === "css") {
+      setCssCode(value);
+    }
+
+    if (type === "js") {
+      setJsCode(value);
+    }
 
     setSaved(false);
 
@@ -345,119 +274,176 @@ function Builder() {
     }
 
     historyTimer.current = setTimeout(() => {
-      pushHistory({ ...latestCodeRef.current });
+      pushHistory({
+        ...latestCodeRef.current,
+      });
+
       historyTimer.current = null;
     }, 450);
   }
 
-  /*
-  ========================================================
-  AUTO SAVE
-  ========================================================
-  */
+  /* ========================================================
+     AUTO SAVE
+  ======================================================== */
 
-  async function saveProjectData({ silent = false } = {}) {
-    if (!projectId || !isLoadedRef.current) return false;
+  async function saveProjectData({
+    silent = false,
+  } = {}) {
+    if (
+      !projectId ||
+      !isLoadedRef.current
+    ) {
+      return false;
+    }
 
-    if (!silent) setSaving(true);
-    else setAutoSaving(true);
+    if (!silent) {
+      setSaving(true);
+    } else {
+      setAutoSaving(true);
+    }
 
     try {
-      const { data: { user } } =
-        await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-      if (!user) throw new Error("You are not logged in.");
+      if (!user) {
+        throw new Error(
+          "You are not logged in."
+        );
+      }
 
       const { error } = await supabase
         .from("projects")
         .update({
           prompt,
-          html_code: latestCodeRef.current.html,
-          css_code: latestCodeRef.current.css,
-          js_code: latestCodeRef.current.js,
-          updated_at: new Date().toISOString(),
+          html_code:
+            latestCodeRef.current.html,
+          css_code:
+            latestCodeRef.current.css,
+          js_code:
+            latestCodeRef.current.js,
+          updated_at:
+            new Date().toISOString(),
         })
         .eq("id", projectId)
         .eq("user_id", user.id);
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
       setSaved(true);
+
       return true;
     } catch (error) {
-      console.error("Save error:", error);
+      console.error(
+        "Save error:",
+        error
+      );
+
       if (!silent) {
-        alert(error?.message || "Save failed.");
+        alert(
+          error?.message ||
+            "Save failed."
+        );
       }
+
       return false;
     } finally {
-      if (!silent) setSaving(false);
-      else setAutoSaving(false);
+      if (!silent) {
+        setSaving(false);
+      } else {
+        setAutoSaving(false);
+      }
     }
   }
 
   useEffect(() => {
-    if (!projectId || !isLoadedRef.current || saved || generating) return;
-
-    if (autoSaveTimer.current) {
-      clearTimeout(autoSaveTimer.current);
-    }
-
-    autoSaveTimer.current = setTimeout(() => {
-      saveProjectData({ silent: true });
-      autoSaveTimer.current = null;
-    }, 1800);
-
-    return () => {
-      if (autoSaveTimer.current) {
-        clearTimeout(autoSaveTimer.current);
-      }
-    };
-  }, [prompt, htmlCode, cssCode, jsCode, saved, generating, projectId]);
-
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-      if (historyTimer.current) clearTimeout(historyTimer.current);
-    };
-  }, []);
-
-  /*
-  ========================================================
-  UNDO
-  ========================================================
-  */
-
-  function handleUndo() {
-    if (historyTimer.current) {
-      clearTimeout(historyTimer.current);
-      historyTimer.current = null;
-    }
-
     if (
-      historyIndex <= 0
+      !projectId ||
+      !isLoadedRef.current ||
+      saved ||
+      generating
     ) {
       return;
     }
 
+    if (autoSaveTimer.current) {
+      clearTimeout(
+        autoSaveTimer.current
+      );
+    }
+
+    autoSaveTimer.current = setTimeout(
+      () => {
+        saveProjectData({
+          silent: true,
+        });
+
+        autoSaveTimer.current = null;
+      },
+      1800
+    );
+
+    return () => {
+      if (autoSaveTimer.current) {
+        clearTimeout(
+          autoSaveTimer.current
+        );
+      }
+    };
+  }, [
+    prompt,
+    htmlCode,
+    cssCode,
+    jsCode,
+    saved,
+    generating,
+    projectId,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer.current) {
+        clearTimeout(
+          autoSaveTimer.current
+        );
+      }
+
+      if (historyTimer.current) {
+        clearTimeout(
+          historyTimer.current
+        );
+      }
+    };
+  }, []);
+
+  /* ========================================================
+     UNDO
+  ======================================================== */
+
+  function handleUndo() {
+    if (historyTimer.current) {
+      clearTimeout(
+        historyTimer.current
+      );
+
+      historyTimer.current = null;
+    }
+
+    if (historyIndex <= 0) {
+      return;
+    }
+
     const previous =
-      history[
-        historyIndex - 1
-      ];
+      history[historyIndex - 1];
 
     if (!previous) return;
 
-    setHtmlCode(
-      previous.html
-    );
-
-    setCssCode(
-      previous.css
-    );
-
-    setJsCode(
-      previous.js
-    );
+    setHtmlCode(previous.html);
+    setCssCode(previous.css);
+    setJsCode(previous.js);
 
     latestCodeRef.current = previous;
 
@@ -468,20 +454,20 @@ function Builder() {
     setSaved(false);
 
     setPreviewKey(
-      (value) =>
-        value + 1
+      (value) => value + 1
     );
   }
 
-  /*
-  ========================================================
-  REDO
-  ========================================================
-  */
+  /* ========================================================
+     REDO
+  ======================================================== */
 
   function handleRedo() {
     if (historyTimer.current) {
-      clearTimeout(historyTimer.current);
+      clearTimeout(
+        historyTimer.current
+      );
+
       historyTimer.current = null;
     }
 
@@ -493,23 +479,13 @@ function Builder() {
     }
 
     const next =
-      history[
-        historyIndex + 1
-      ];
+      history[historyIndex + 1];
 
     if (!next) return;
 
-    setHtmlCode(
-      next.html
-    );
-
-    setCssCode(
-      next.css
-    );
-
-    setJsCode(
-      next.js
-    );
+    setHtmlCode(next.html);
+    setCssCode(next.css);
+    setJsCode(next.js);
 
     latestCodeRef.current = next;
 
@@ -520,31 +496,31 @@ function Builder() {
     setSaved(false);
 
     setPreviewKey(
-      (value) =>
-        value + 1
+      (value) => value + 1
     );
   }
 
-  /*
-  ========================================================
-  SAVE
-  ========================================================
-  */
+  /* ========================================================
+     SAVE
+  ======================================================== */
 
   async function handleSave() {
     if (autoSaveTimer.current) {
-      clearTimeout(autoSaveTimer.current);
+      clearTimeout(
+        autoSaveTimer.current
+      );
+
       autoSaveTimer.current = null;
     }
 
-    await saveProjectData({ silent: false });
+    await saveProjectData({
+      silent: false,
+    });
   }
 
-  /*
-  ========================================================
-  SSE PARSER
-  ========================================================
-  */
+  /* ========================================================
+     SSE PARSER
+  ======================================================== */
 
   function parseSSEChunk(
     buffer,
@@ -562,34 +538,24 @@ function Builder() {
       const lines =
         eventBlock.split("\n");
 
-      let eventName =
-        "message";
-
+      let eventName = "message";
       let data = "";
 
-      for (
-        const line of lines
-      ) {
+      for (const line of lines) {
         if (
-          line.startsWith(
-            "event:"
-          )
+          line.startsWith("event:")
         ) {
-          eventName =
-            line
-              .slice(6)
-              .trim();
+          eventName = line
+            .slice(6)
+            .trim();
         }
 
         if (
-          line.startsWith(
-            "data:"
-          )
+          line.startsWith("data:")
         ) {
-          data +=
-            line
-              .slice(5)
-              .trim();
+          data += line
+            .slice(5)
+            .trim();
         }
       }
 
@@ -615,13 +581,13 @@ function Builder() {
     return remaining;
   }
 
-  /*
-  ========================================================
-  GENERATE WITH GEMINI
-  ========================================================
-  */
+  /* ========================================================
+     GENERATE WITH GEMINI
+  ======================================================== */
 
-  async function handleGenerate(mode = "generate") {
+  async function handleGenerate(
+    mode = "generate"
+  ) {
     if (generating) {
       return;
     }
@@ -634,15 +600,21 @@ function Builder() {
       return;
     }
 
-    if (mode === "edit" && !htmlCode.trim() && !cssCode.trim() && !jsCode.trim()) {
-      alert("There is no existing website to edit yet. Generate a website first.");
+    if (
+      mode === "edit" &&
+      !htmlCode.trim() &&
+      !cssCode.trim() &&
+      !jsCode.trim()
+    ) {
+      alert(
+        "There is no existing website to edit yet. Generate a website first."
+      );
+
       return;
     }
 
     setGenerating(true);
-
     setGenerationMode(mode);
-
     setGenerationError("");
 
     setGenerationStage(
@@ -656,19 +628,14 @@ function Builder() {
     );
 
     setGenerationModel("");
-
     setGenerationProgress(3);
-
     setActiveMode("code");
 
-    /*
-    A fresh generation starts with an empty editor.
-    An edit keeps the existing code visible while the
-    AI streams the updated version into the editor.
-    */
-
     if (historyTimer.current) {
-      clearTimeout(historyTimer.current);
+      clearTimeout(
+        historyTimer.current
+      );
+
       historyTimer.current = null;
     }
 
@@ -676,7 +643,12 @@ function Builder() {
       setHtmlCode("");
       setCssCode("");
       setJsCode("");
-      latestCodeRef.current = { html: "", css: "", js: "" };
+
+      latestCodeRef.current = {
+        html: "",
+        css: "",
+        js: "",
+      };
     }
 
     abortController.current =
@@ -699,24 +671,15 @@ function Builder() {
 
             body: JSON.stringify({
               prompt,
-
               mode,
-
               currentCode,
             }),
 
             signal:
               abortController
-                .current
-                .signal,
+                .current.signal,
           }
         );
-
-      /*
-      ------------------------------------------
-      RESPONSE ERROR
-      ------------------------------------------
-      */
 
       if (!response.ok) {
         let message =
@@ -731,9 +694,7 @@ function Builder() {
             message;
         } catch {}
 
-        throw new Error(
-          message
-        );
+        throw new Error(message);
       }
 
       if (!response.body) {
@@ -746,353 +707,305 @@ function Builder() {
         response.body.getReader();
 
       const decoder =
-        new TextDecoder(
-          "utf-8"
-        );
+        new TextDecoder("utf-8");
 
       let buffer = "";
 
       let streamedHTML = "";
-
       let streamedCSS = "";
-
       let streamedJS = "";
 
-      let receivedComplete =
-        false;
-
-      let receivedError =
-        false;
-
-      /*
-      ======================================================
-      READ STREAM
-      ======================================================
-      */
+      let receivedComplete = false;
+      let receivedError = false;
 
       while (true) {
         const {
           value,
           done,
-        } =
-          await reader.read();
+        } = await reader.read();
 
         if (done) break;
 
-        buffer +=
-          decoder.decode(
-            value,
-            {
-              stream: true,
-            }
-          );
+        buffer += decoder.decode(
+          value,
+          {
+            stream: true,
+          }
+        );
 
-        buffer =
-          parseSSEChunk(
-            buffer,
-            (
-              event,
-              data
-            ) => {
-              /*
-              ----------------------------------
-              STATUS
-              ----------------------------------
-              */
+        buffer = parseSSEChunk(
+          buffer,
+          (event, data) => {
+            /* STATUS */
 
-              if (
-                event ===
-                "status"
-              ) {
-                setGenerationStage(
-                  data.stage || ""
-                );
+            if (event === "status") {
+              setGenerationStage(
+                data.stage || ""
+              );
 
-                setGenerationMessage(
-                  data.message ||
-                    "Generating..."
-                );
+              setGenerationMessage(
+                data.message ||
+                  "Generating..."
+              );
 
-                if (
+              if (data.model) {
+                setGenerationModel(
                   data.model
-                ) {
-                  setGenerationModel(
-                    data.model
-                  );
-                }
-
-                const progressMap = {
-                  thinking: 5,
-                  connecting: 10,
-                  generating: 15,
-                  html: 35,
-                  css: 65,
-                  js: 85,
-                  retrying: 10,
-                  complete: 100,
-                };
-
-                const progress =
-                  progressMap[
-                    data.stage
-                  ];
-
-                if (
-                  progress !==
-                  undefined
-                ) {
-                  setGenerationProgress(
-                    progress
-                  );
-                }
+                );
               }
 
-              /*
-              ----------------------------------
-              CODE
-              ----------------------------------
-              */
+              const progressMap = {
+                thinking: 5,
+                connecting: 10,
+                generating: 15,
+                html: 35,
+                css: 65,
+                js: 85,
+                retrying: 10,
+                complete: 100,
+              };
+
+              const progress =
+                progressMap[
+                  data.stage
+                ];
 
               if (
-                event ===
-                "code"
+                progress !==
+                undefined
               ) {
-                if (
-                  data.type ===
-                  "html"
-                ) {
-                  streamedHTML =
-                    data.value ||
-                    streamedHTML;
-
-                  latestCodeRef.current = { ...latestCodeRef.current, html: streamedHTML };
-
-                  setHtmlCode(
-                    streamedHTML
-                  );
-
-                  setGenerationProgress(
-                    Math.min(
-                      60,
-                      15 +
-                        Math.floor(
-                          streamedHTML.length /
-                            150
-                        )
-                    )
-                  );
-                }
-
-                if (
-                  data.type ===
-                  "css"
-                ) {
-                  streamedCSS =
-                    data.value ||
-                    streamedCSS;
-
-                  latestCodeRef.current = { ...latestCodeRef.current, css: streamedCSS };
-
-                  setCssCode(
-                    streamedCSS
-                  );
-
-                  setGenerationProgress(
-                    Math.min(
-                      85,
-                      55 +
-                        Math.floor(
-                          streamedCSS.length /
-                            200
-                        )
-                    )
-                  );
-                }
-
-                if (
-                  data.type ===
-                  "js"
-                ) {
-                  streamedJS =
-                    data.value ||
-                    streamedJS;
-
-                  latestCodeRef.current = { ...latestCodeRef.current, js: streamedJS };
-
-                  setJsCode(
-                    streamedJS
-                  );
-
-                  setGenerationProgress(
-                    Math.min(
-                      98,
-                      80 +
-                        Math.floor(
-                          streamedJS.length /
-                            300
-                        )
-                    )
-                  );
-                }
-
-                setSaved(false);
+                setGenerationProgress(
+                  progress
+                );
               }
+            }
 
-              /*
-              ----------------------------------
-              COMPLETE
-              ----------------------------------
-              */
+            /* CODE */
 
+            if (event === "code") {
               if (
-                event ===
-                "complete"
+                data.type === "html"
               ) {
-                receivedComplete =
-                  true;
-
-                const finalHTML =
-                  data.html ||
+                streamedHTML =
+                  data.value ||
                   streamedHTML;
 
-                const finalCSS =
-                  data.css ||
-                  streamedCSS;
-
-                const finalJS =
-                  data.js ||
-                  streamedJS;
+                latestCodeRef.current =
+                  {
+                    ...latestCodeRef.current,
+                    html:
+                      streamedHTML,
+                  };
 
                 setHtmlCode(
-                  finalHTML
+                  streamedHTML
                 );
-
-                setCssCode(
-                  finalCSS
-                );
-
-                setJsCode(
-                  finalJS
-                );
-
-                latestCodeRef.current = { html: finalHTML, css: finalCSS, js: finalJS };
 
                 setGenerationProgress(
-                  100
-                );
-
-                setGenerationStage(
-                  "complete"
-                );
-
-                setGenerationMessage(
-                  mode === "edit"
-                    ? "Website updated successfully."
-                    : "Website generated successfully."
-                );
-
-                if (
-                  data.model
-                ) {
-                  setGenerationModel(
-                    data.model
-                  );
-                }
-
-                const finalState = {
-                  html:
-                    finalHTML,
-
-                  css:
-                    finalCSS,
-
-                  js:
-                    finalJS,
-                };
-
-                /*
-                Add generated version
-                to history.
-                */
-
-                setHistory(
-                  (previous) => {
-                    const current =
-                      previous[
-                        previous.length -
-                          1
-                      ];
-
-                    if (
-                      current &&
-                      current.html ===
-                        finalState.html &&
-                      current.css ===
-                        finalState.css &&
-                      current.js ===
-                        finalState.js
-                    ) {
-                      return previous;
-                    }
-
-                    return [
-                      ...previous,
-                      finalState,
-                    ].slice(-30);
-                  }
-                );
-
-                setHistoryIndex(
-                  (previous) =>
-                    Math.min(
-                      previous + 1,
-                      29
-                    )
-                );
-
-                setSaved(false);
-
-                setPreviewKey(
-                  (value) =>
-                    value + 1
-                );
-
-                setActiveMode(
-                  "preview"
+                  Math.min(
+                    60,
+                    15 +
+                      Math.floor(
+                        streamedHTML
+                          .length /
+                          150
+                      )
+                  )
                 );
               }
-
-              /*
-              ----------------------------------
-              ERROR
-              ----------------------------------
-              */
 
               if (
-                event ===
-                "error"
+                data.type === "css"
               ) {
-                receivedError =
-                  true;
+                streamedCSS =
+                  data.value ||
+                  streamedCSS;
 
-                setGenerationError(
-                  data.message ||
-                    "AI generation failed."
+                latestCodeRef.current =
+                  {
+                    ...latestCodeRef.current,
+                    css:
+                      streamedCSS,
+                  };
+
+                setCssCode(
+                  streamedCSS
                 );
 
-                setGenerationStage(
-                  "error"
+                setGenerationProgress(
+                  Math.min(
+                    85,
+                    55 +
+                      Math.floor(
+                        streamedCSS
+                          .length /
+                          200
+                      )
+                  )
                 );
               }
+
+              if (
+                data.type === "js"
+              ) {
+                streamedJS =
+                  data.value ||
+                  streamedJS;
+
+                latestCodeRef.current =
+                  {
+                    ...latestCodeRef.current,
+                    js:
+                      streamedJS,
+                  };
+
+                setJsCode(
+                  streamedJS
+                );
+
+                setGenerationProgress(
+                  Math.min(
+                    98,
+                    80 +
+                      Math.floor(
+                        streamedJS
+                          .length /
+                          300
+                      )
+                  )
+                );
+              }
+
+              setSaved(false);
             }
-          );
+
+            /* COMPLETE */
+
+            if (event === "complete") {
+              receivedComplete = true;
+
+              const finalHTML =
+                data.html ||
+                streamedHTML;
+
+              const finalCSS =
+                data.css ||
+                streamedCSS;
+
+              const finalJS =
+                data.js ||
+                streamedJS;
+
+              setHtmlCode(
+                finalHTML
+              );
+
+              setCssCode(
+                finalCSS
+              );
+
+              setJsCode(
+                finalJS
+              );
+
+              latestCodeRef.current =
+                {
+                  html: finalHTML,
+                  css: finalCSS,
+                  js: finalJS,
+                };
+
+              setGenerationProgress(
+                100
+              );
+
+              setGenerationStage(
+                "complete"
+              );
+
+              setGenerationMessage(
+                mode === "edit"
+                  ? "Website updated successfully."
+                  : "Website generated successfully."
+              );
+
+              if (data.model) {
+                setGenerationModel(
+                  data.model
+                );
+              }
+
+              const finalState = {
+                html: finalHTML,
+                css: finalCSS,
+                js: finalJS,
+              };
+
+              setHistory(
+                (previous) => {
+                  const current =
+                    previous[
+                      previous.length -
+                        1
+                    ];
+
+                  if (
+                    current &&
+                    current.html ===
+                      finalState.html &&
+                    current.css ===
+                      finalState.css &&
+                    current.js ===
+                      finalState.js
+                  ) {
+                    return previous;
+                  }
+
+                  return [
+                    ...previous,
+                    finalState,
+                  ].slice(-30);
+                }
+              );
+
+              setHistoryIndex(
+                (previous) =>
+                  Math.min(
+                    previous + 1,
+                    29
+                  )
+              );
+
+              setSaved(false);
+
+              setPreviewKey(
+                (value) => value + 1
+              );
+
+              setActiveMode(
+                "preview"
+              );
+            }
+
+            /* ERROR */
+
+            if (event === "error") {
+              receivedError = true;
+
+              setGenerationError(
+                data.message ||
+                  "AI generation failed."
+              );
+
+              setGenerationStage(
+                "error"
+              );
+            }
+          }
+        );
       }
 
-      /*
-      ======================================================
-      FALLBACK IF STREAM CLOSED
-      ======================================================
-      */
+      /* FALLBACK */
 
       if (
         !receivedComplete &&
@@ -1115,6 +1028,12 @@ function Builder() {
           streamedJS
         );
 
+        latestCodeRef.current = {
+          html: streamedHTML,
+          css: streamedCSS,
+          js: streamedJS,
+        };
+
         setGenerationStage(
           "complete"
         );
@@ -1136,8 +1055,7 @@ function Builder() {
         setSaved(false);
 
         setPreviewKey(
-          (value) =>
-            value + 1
+          (value) => value + 1
         );
       }
     } catch (error) {
@@ -1169,17 +1087,13 @@ function Builder() {
       }
     } finally {
       setGenerating(false);
-
-      abortController.current =
-        null;
+      abortController.current = null;
     }
   }
 
-  /*
-  ========================================================
-  CANCEL GENERATION
-  ========================================================
-  */
+  /* ========================================================
+     CANCEL GENERATION
+  ======================================================== */
 
   function handleCancelGeneration() {
     if (
@@ -1199,11 +1113,9 @@ function Builder() {
     );
   }
 
-  /*
-  ========================================================
-  PREVIEW DOCUMENT
-  ========================================================
-  */
+  /* ========================================================
+     PREVIEW DOCUMENT
+  ======================================================== */
 
   const previewDocument =
     useMemo(
@@ -1271,21 +1183,18 @@ console.error(
       ]
     );
 
-  /*
-  ========================================================
-  DOWNLOAD ZIP
-  ========================================================
-  */
+  /* ========================================================
+     DOWNLOAD ZIP
+  ======================================================== */
 
   async function handleDownloadZip() {
     if (!project) return;
 
     try {
-      const zip =
-        new JSZip();
+      const zip = new JSZip();
 
-      const html =
-        `<!DOCTYPE html>
+      const html = `
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -1298,9 +1207,9 @@ console.error(
 >
 
 <title>${
-          project.name ||
-          "My Website"
-        }</title>
+        project.name ||
+        "My Website"
+      }</title>
 
 <link
   rel="stylesheet"
@@ -1317,7 +1226,8 @@ ${htmlCode}
 
 </body>
 
-</html>`;
+</html>
+`;
 
       zip.file(
         "index.html",
@@ -1351,11 +1261,10 @@ ${htmlCode}
 
       link.href = url;
 
-      link.download =
-        `${
-          project.name ||
-          "website"
-        }.zip`;
+      link.download = `${
+        project.name ||
+        "website"
+      }.zip`;
 
       document.body.appendChild(
         link
@@ -1384,17 +1293,15 @@ ${htmlCode}
     }
   }
 
-  /*
-  ========================================================
-  EXPORT CODE
-  ========================================================
-  */
+  /* ========================================================
+     EXPORT CODE
+  ======================================================== */
 
   function handleExportCode() {
     if (!project) return;
 
-    const content =
-      `===== index.html =====
+    const content = `
+===== index.html =====
 
 <!DOCTYPE html>
 <html lang="en">
@@ -1409,9 +1316,9 @@ ${htmlCode}
 >
 
 <title>${
-        project.name ||
-        "My Website"
-      }</title>
+      project.name ||
+      "My Website"
+    }</title>
 
 <link
   rel="stylesheet"
@@ -1462,11 +1369,10 @@ ${jsCode}
 
     link.href = url;
 
-    link.download =
-      `${
-        project.name ||
-        "website"
-      }-code.txt`;
+    link.download = `${
+      project.name ||
+      "website"
+    }-code.txt`;
 
     document.body.appendChild(
       link
@@ -1485,11 +1391,9 @@ ${jsCode}
     );
   }
 
-  /*
-  ========================================================
-  LOADING
-  ========================================================
-  */
+  /* ========================================================
+     LOADING
+  ======================================================== */
 
   if (loading) {
     return (
@@ -1511,11 +1415,9 @@ ${jsCode}
     );
   }
 
-  /*
-  ========================================================
-  PROJECT ERROR
-  ========================================================
-  */
+  /* ========================================================
+     PROJECT ERROR
+  ======================================================== */
 
   if (!project) {
     return (
@@ -1548,11 +1450,9 @@ ${jsCode}
     );
   }
 
-  /*
-  ========================================================
-  RENDER
-  ========================================================
-  */
+  /* ========================================================
+     RENDER
+  ======================================================== */
 
   return (
     <div
@@ -1680,8 +1580,7 @@ ${jsCode}
               handleUndo
             }
             disabled={
-              historyIndex <=
-              0
+              historyIndex <= 0
             }
           >
             ↶
@@ -1758,12 +1657,11 @@ ${jsCode}
           </button>
 
           <button>
-            ◆ GitHub
+            ◇ GitHub
 
             <small>
               Coming soon
             </small>
-
           </button>
 
           <button>
@@ -1772,7 +1670,6 @@ ${jsCode}
             <small>
               Coming soon
             </small>
-
           </button>
 
         </div>
@@ -1817,7 +1714,8 @@ ${jsCode}
             <span className="status-dot" />
 
             {generating
-              ? generationMode === "edit"
+              ? generationMode ===
+                "edit"
                 ? "Gemini Editing..."
                 : "Gemini Generating..."
               : "Gemini Ready"}
@@ -1835,7 +1733,8 @@ ${jsCode}
               markChanged();
             }}
             placeholder={
-              generationMode === "edit"
+              generationMode ===
+              "edit"
                 ? "Describe the changes you want AI to make..."
                 : "Describe what you want to build..."
             }
@@ -1849,7 +1748,9 @@ ${jsCode}
               <button
                 className="generate-button"
                 onClick={() =>
-                  handleGenerate("generate")
+                  handleGenerate(
+                    "generate"
+                  )
                 }
               >
                 <span>✦</span>
@@ -1859,7 +1760,9 @@ ${jsCode}
               <button
                 className="generate-button ai-edit-button"
                 onClick={() =>
-                  handleGenerate("edit")
+                  handleGenerate(
+                    "edit"
+                  )
                 }
                 disabled={
                   !htmlCode.trim() &&
@@ -1898,7 +1801,9 @@ ${jsCode}
                 </span>
 
                 <strong>
-                  {generationProgress}%
+                  {
+                    generationProgress
+                  }%
                 </strong>
 
               </div>
@@ -1908,8 +1813,7 @@ ${jsCode}
                 <div
                   className="ai-progress-fill"
                   style={{
-                    width:
-                      `${generationProgress}%`,
+                    width: `${generationProgress}%`,
                   }}
                 />
 
@@ -2001,6 +1905,36 @@ ${jsCode}
             >
               ◈ Add animations
             </button>
+
+          </div>
+
+          {/* ==================================================
+              FILE UPLOAD
+          ================================================== */}
+
+          <div className="file-upload-section">
+
+            <div className="file-upload-title">
+
+              <span>
+                📁
+              </span>
+
+              <div>
+
+                <strong>
+                  Project Files
+                </strong>
+
+                <small>
+                  Upload images & files
+                </small>
+
+              </div>
+
+            </div>
+
+            <FileUpload />
 
           </div>
 
@@ -2141,10 +2075,7 @@ ${jsCode}
                         "\n"
                       ).length,
                   },
-                  (
-                    _,
-                    index
-                  ) => (
+                  (_, index) => (
                     <span
                       key={
                         index
@@ -2164,9 +2095,13 @@ ${jsCode}
                   value={
                     htmlCode
                   }
-                  onChange={(event) => {
-                    handleManualCodeChange("html", event.target.value);
-                  }}
+                  onChange={(event) =>
+                    handleManualCodeChange(
+                      "html",
+                      event.target
+                        .value
+                    )
+                  }
                   spellCheck="false"
                 />
               )}
@@ -2178,9 +2113,13 @@ ${jsCode}
                   value={
                     cssCode
                   }
-                  onChange={(event) => {
-                    handleManualCodeChange("css", event.target.value);
-                  }}
+                  onChange={(event) =>
+                    handleManualCodeChange(
+                      "css",
+                      event.target
+                        .value
+                    )
+                  }
                   spellCheck="false"
                 />
               )}
@@ -2192,9 +2131,13 @@ ${jsCode}
                   value={
                     jsCode
                   }
-                  onChange={(event) => {
-                    handleManualCodeChange("js", event.target.value);
-                  }}
+                  onChange={(event) =>
+                    handleManualCodeChange(
+                      "js",
+                      event.target
+                        .value
+                    )
+                  }
                   spellCheck="false"
                 />
               )}
@@ -2384,9 +2327,7 @@ ${jsCode}
 
           <div
             className="settings-panel"
-            onClick={(
-              event
-            ) =>
+            onClick={(event) =>
               event.stopPropagation()
             }
           >

@@ -5,6 +5,7 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Builder from "./pages/Builder";
 import Templates from "./pages/Templates";
+import Upload from "./pages/Upload";
 function LandingPage() {
   return (
     <div className="app">
@@ -427,7 +428,9 @@ function App() {
       <Route path="/register" element={<Register />} />
       <Route path="/dashboard" element={<Dashboard />} />
 <Route path="/builder/:projectId" element={<Builder />} />
-    </Routes>
+<Route path="/upload" element={<Upload />} />
+ </Routes>
+
   );
 }
 
