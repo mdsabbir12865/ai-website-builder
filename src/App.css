@@ -5877,3 +5877,160 @@ a {
     font-size: 10px;
   }
 }
+/* ========================================================
+   UPLOADED FILES
+======================================================== */
+
+.uploaded-files {
+  margin-top: 16px;
+}
+
+.uploaded-files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+
+.uploaded-files-header strong {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.uploaded-files-header span {
+  min-width: 22px;
+  padding: 3px 7px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 9px;
+  text-align: center;
+}
+
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.uploaded-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.file-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 15px;
+}
+
+.file-details {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.file-details strong {
+  max-width: 145px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 10px;
+}
+
+.file-details small {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 8px;
+}
+
+.file-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.file-actions button {
+  width: 29px !important;
+  min-height: 29px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  font-size: 12px !important;
+}
+
+.file-actions button:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.file-actions .delete-file-btn:hover {
+  background: rgba(255, 70, 70, 0.15) !important;
+}
+
+.selected-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-success {
+  color: #67e8a5 !important;
+}
+
+.file-error {
+  color: #ff8585 !important;
+}
+
+.files-loading,
+.empty-files {
+  padding: 18px 8px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 10px;
+}
+
+.empty-files span {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 22px;
+}
+
+.empty-files p {
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .files-list {
+    max-height: 240px;
+  }
+
+  .file-details strong {
+    max-width: 120px;
+  }
+}
