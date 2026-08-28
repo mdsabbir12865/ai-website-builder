@@ -37,9 +37,17 @@ export default async function handler(
       });
     }
 
-    const state =
-      createOAuthState(user.id);
+const returnTo =
+  typeof req.body?.returnTo === "string" &&
+  req.body.returnTo.startsWith("/builder/")
+    ? req.body.returnTo
+    : "/dashboard";
 
+const state =
+  createOAuthState(
+    user.id,
+    returnTo
+  );
     setCookie(
       res,
       "github_oauth_state",

@@ -44,17 +44,24 @@ function GitHubConnect() {
         return;
       }
 
-      const response =
-        await fetch(
-          "/api/github/status",
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
-
+const response =
+  await fetch(
+    "/api/github/connect",
+    {
+      method: "POST",
+      headers: {
+        Authorization:
+          `Bearer ${token}`,
+        "Content-Type":
+          "application/json",
+      },
+      body: JSON.stringify({
+        returnTo:
+          window.location.pathname +
+          window.location.search,
+      }),
+    }
+  );
       const data =
         await response.json();
 

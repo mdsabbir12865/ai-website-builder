@@ -160,20 +160,32 @@ export default async function handler(
       res,
       "github_oauth_state"
     );
+const returnTo =
+  typeof payload.returnTo === "string" &&
+  payload.returnTo.startsWith("/builder/")
+    ? payload.returnTo
+    : "/dashboard";
 
-    return res.redirect(
-      "/builder/github?github_connected=1"
-    );
+return res.redirect(
+  `${returnTo}${
+    returnTo.includes("?")
+      ? "&"
+      : "?"
+  }github_connected=1`
+);
   } catch (error) {
     console.error(
       "GitHub callback error:",
       error
     );
+const returnTo =
+  "/dashboard";
 
-    return res.redirect(
-      `/builder/github?github_error=${encodeURIComponent(
-        "GitHub connection failed."
-      )}`
-    );
+return res.redirect(
+  `${returnTo}?github_error=${encodeURIComponent(
+    error_description ||
+      error
+  )}`
+);
   }
 }

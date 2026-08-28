@@ -113,13 +113,16 @@ function getOAuthSecret() {
   return secret;
 }
 
-export function createOAuthState(userId) {
+export function createOAuthState(
+  userId,
+  returnTo = "/dashboard"
+) {
   const payload = {
     userId,
+    returnTo,
     nonce: crypto.randomBytes(32).toString("hex"),
     createdAt: Date.now(),
   };
-
   const encoded = base64url(
     JSON.stringify(payload)
   );
