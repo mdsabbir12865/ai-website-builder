@@ -6034,3 +6034,142 @@ a {
     max-width: 120px;
   }
 }
+/* =========================================================
+   PROJECT FILE ACTION BUTTONS FIX
+   ========================================================= */
+
+.project-file-manager .uploaded-file-item {
+  width: 100%;
+  min-width: 0;
+}
+
+.project-file-manager .file-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: max-content;
+}
+
+.project-file-manager .file-actions button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  flex: 0 0 36px;
+
+  padding: 0;
+  margin: 0;
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+
+  line-height: 1;
+}
+
+.project-file-manager .file-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Delete button */
+.project-file-manager .file-actions .delete-file-btn {
+  flex: 0 0 36px;
+}
+
+/* =========================================================
+   FILE ITEM LAYOUT
+   ========================================================= */
+
+.project-file-manager .uploaded-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.project-file-manager .file-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.project-file-manager .file-details {
+  min-width: 0;
+  flex: 1;
+}
+
+.project-file-manager .file-details strong {
+  display: block;
+
+  max-width: 100%;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 600px) {
+
+  .project-file-manager .uploaded-file-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .project-file-manager .file-info {
+    width: 100%;
+  }
+
+  .project-file-manager .file-actions {
+    width: 100%;
+    margin-left: 0;
+
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+
+    gap: 7px;
+  }
+
+  .project-file-manager .file-actions button {
+    width: 100%;
+    min-width: 0;
+    height: 38px;
+    min-height: 38px;
+
+    flex: none;
+  }
+
+  .project-file-manager .file-actions .delete-file-btn {
+    width: 100%;
+    flex: none;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 380px) {
+
+  .project-file-manager .file-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+}
