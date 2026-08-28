@@ -13,6 +13,7 @@ import {
 import { supabase } from "../lib/supabase";
 import JSZip from "jszip";
 import FileUpload from "../components/FileUpload";
+import GitHubConnect from "../components/GitHubConnect";
 
 function Builder() {
   const { projectId } = useParams();
@@ -2134,14 +2135,7 @@ ${jsCode}
             &lt;/&gt; Export Code
           </button>
 
-          <button>
-            ◇ GitHub
-
-            <small>
-              Coming soon
-            </small>
-          </button>
-
+<GitHubConnect />
           <button>
             ▲ Vercel
 
