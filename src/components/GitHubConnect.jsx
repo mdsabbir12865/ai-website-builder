@@ -43,7 +43,6 @@ function GitHubConnect() {
       if (!token) {
         return;
       }
-
 const response =
   await fetch(
     "/api/github/connect",

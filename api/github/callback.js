@@ -27,11 +27,11 @@ export default async function handler(
 
   if (error) {
     return res.redirect(
-      `/builder/github?github_error=${encodeURIComponent(
-        error_description ||
-          error
-      )}`
-    );
+  `/dashboard?github_error=${encodeURIComponent(
+    error_description ||
+      error
+  )}`
+);
   }
 
   if (!code || !state) {
@@ -84,9 +84,8 @@ export default async function handler(
         "GitHub token exchange failed:",
         tokenData
       );
-
-      return res.redirect(
-        `/builder/github?github_error=${encodeURIComponent(
+return res.redirect(
+  `/dashboard?github_error=${encodeURIComponent(
           "GitHub authorization failed."
         )}`
       );
@@ -160,6 +159,11 @@ export default async function handler(
       res,
       "github_oauth_state"
     );
+const returnTo =
+  typeof payload.returnTo === "string" &&
+  payload.returnTo.startsWith("/builder/")
+    ? payload.returnTo
+    : "/dashboard";
 const returnTo =
   typeof payload.returnTo === "string" &&
   payload.returnTo.startsWith("/builder/")

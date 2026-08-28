@@ -42,6 +42,11 @@ const returnTo =
   req.body.returnTo.startsWith("/builder/")
     ? req.body.returnTo
     : "/dashboard";
+const returnTo =
+  typeof req.body?.returnTo === "string" &&
+  req.body.returnTo.startsWith("/builder/")
+    ? req.body.returnTo
+    : "/dashboard";
 
 const state =
   createOAuthState(
