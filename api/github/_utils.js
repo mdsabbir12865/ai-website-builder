@@ -11,8 +11,7 @@ export const GITHUB_REDIRECT_URI =
   "https://ms-do.vercel.app/api/github/callback";
 
 const SUPABASE_URL =
-  process.env.SUPABASE_URL ||
-  process.env.SUPABASE_URL;
+  process.env.VITE_SUPABASE_URL;
 
 const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -61,7 +60,7 @@ export async function getSupabaseUser(req) {
 
   const supabase = createClient(
     SUPABASE_URL,
-    process.env.SUPABASE_PUBLISHABLE_KEY,
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY,
     {
       auth: {
         autoRefreshToken: false,
