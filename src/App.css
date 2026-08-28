@@ -4985,8 +4985,6 @@ a {
     #927cff 100%
   );
 
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
 .templates-header p {

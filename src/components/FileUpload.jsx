@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 
-function FileUpload({ projectId, onImageSelect }) {
+function FileUpload({ projectId, onImageSelect, onFilesChange }) {
   const [user, setUser] = useState(null);
   const [files, setFiles] = useState([]);
 
@@ -110,7 +110,13 @@ function FileUpload({ projectId, onImageSelect }) {
         throw error;
       }
 
-      setFiles(data || []);
+      const nextFiles = data || [];
+
+      setFiles(nextFiles);
+
+      if (typeof onFilesChange === "function") {
+        onFilesChange(nextFiles);
+      }
     } catch (err) {
       console.error("Load files error:", err);
 
@@ -874,6 +880,187 @@ function FileUpload({ projectId, onImageSelect }) {
   return (
     <div className="project-file-manager">
 
+      <style>{`
+        .project-file-manager {
+          width: 100%;
+          min-width: 0;
+          overflow: hidden;
+        }
+
+        .project-file-manager *,
+        .project-file-manager *::before,
+        .project-file-manager *::after {
+          box-sizing: border-box;
+        }
+
+        .project-file-manager > input[type="file"] {
+          display: block;
+          width: 100%;
+          max-width: 100%;
+          margin: 0 0 12px;
+          padding: 9px 10px;
+          border: 1px dashed rgba(148, 163, 184, 0.45);
+          border-radius: 10px;
+          font-size: 12px;
+          line-height: 1.3;
+          overflow: hidden;
+        }
+
+        .project-file-manager .selected-file-box {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          min-width: 0;
+          margin: 10px 0;
+          padding: 10px 12px;
+          border-radius: 10px;
+          overflow: hidden;
+        }
+
+        .project-file-manager .selected-file-box > div {
+          min-width: 0;
+          flex: 1 1 auto;
+        }
+
+        .project-file-manager .selected-file-box strong,
+        .project-file-manager .selected-file-box small {
+          display: block;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .project-file-manager .file-upload-primary-btn {
+          width: 100%;
+          min-height: 42px;
+          margin: 4px 0 14px;
+        }
+
+        .project-file-manager .uploaded-files {
+          width: 100%;
+          min-width: 0;
+          overflow: hidden;
+        }
+
+        .project-file-manager .uploaded-files-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          width: 100%;
+          min-width: 0;
+        }
+
+        .project-file-manager .files-list {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          width: 100%;
+          min-width: 0;
+          margin-top: 10px;
+        }
+
+        .project-file-manager .uploaded-file-item {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) auto !important;
+          align-items: center;
+          gap: 12px;
+          width: 100%;
+          min-width: 0;
+          padding: 10px !important;
+          overflow: hidden;
+        }
+
+        .project-file-manager .file-info {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+          overflow: hidden;
+        }
+
+        .project-file-manager .file-details {
+          min-width: 0;
+          flex: 1 1 auto;
+          overflow: hidden;
+        }
+
+        .project-file-manager .file-details strong,
+        .project-file-manager .file-details small {
+          display: block;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .project-file-manager .file-actions {
+          display: flex !important;
+          flex: 0 0 auto;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 6px !important;
+          width: auto !important;
+          max-width: 100%;
+          min-width: max-content;
+          margin: 0 !important;
+          padding: 0 !important;
+          flex-wrap: nowrap;
+        }
+
+        .project-file-manager .file-actions .file-action-btn {
+          flex: 0 0 34px !important;
+          width: 34px !important;
+          min-width: 34px !important;
+          max-width: 34px !important;
+          height: 34px !important;
+          min-height: 34px !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          line-height: 1 !important;
+          white-space: nowrap !important;
+          border-radius: 8px !important;
+        }
+
+        .project-file-manager .file-actions .file-action-btn:disabled {
+          cursor: not-allowed;
+          opacity: 0.55;
+        }
+
+        .project-file-manager .file-actions .delete-file-btn {
+          flex: 0 0 34px !important;
+          width: 34px !important;
+          min-width: 34px !important;
+          max-width: 34px !important;
+        }
+
+        @media (max-width: 900px) {
+          .project-file-manager .uploaded-file-item {
+            grid-template-columns: 1fr !important;
+            align-items: stretch;
+          }
+
+          .project-file-manager .file-actions {
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            min-width: 0;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .project-file-manager .file-actions {
+            display: grid !important;
+            grid-template-columns: repeat(5, 34px);
+            justify-content: start;
+          }
+        }
+      `}</style>
+
       {/* HEADER */}
 
       <div className="file-upload-title">
@@ -896,6 +1083,7 @@ function FileUpload({ projectId, onImageSelect }) {
         ref={fileInputRef}
         id="project-file-input"
         type="file"
+        accept={ALLOWED_TYPES.join(",")}
         onChange={
           replaceTarget
             ? handleReplaceFileSelect
@@ -927,6 +1115,8 @@ function FileUpload({ projectId, onImageSelect }) {
       {/* UPLOAD BUTTON */}
 
       <button
+        type="button"
+        className="file-upload-primary-btn"
         onClick={handleUpload}
         disabled={
           !selectedFile ||
@@ -1045,6 +1235,9 @@ function FileUpload({ projectId, onImageSelect }) {
 
                   {isPreviewable(file) && (
                     <button
+                      type="button"
+                      className="file-action-btn preview-btn"
+                      aria-label={`Preview ${file.file_name}`}
                       onClick={() =>
                         handlePreview(
                           file
@@ -1060,6 +1253,9 @@ function FileUpload({ projectId, onImageSelect }) {
 
                   {isImage(file) && (
                     <button
+                      type="button"
+                      className="file-action-btn ai-btn"
+                      aria-label={`Use ${file.file_name} as AI reference`}
                       onClick={() =>
                         handleUseImageForAI(
                           file
@@ -1081,6 +1277,9 @@ function FileUpload({ projectId, onImageSelect }) {
                   {/* DOWNLOAD */}
 
                   <button
+                    type="button"
+                    className="file-action-btn download-btn"
+                    aria-label={`Download ${file.file_name}`}
                     onClick={() =>
                       handleDownload(
                         file
@@ -1094,6 +1293,9 @@ function FileUpload({ projectId, onImageSelect }) {
                   {/* REPLACE */}
 
                   <button
+                    type="button"
+                    className="file-action-btn replace-btn"
+                    aria-label={`Replace ${file.file_name}`}
                     onClick={() =>
                       handleStartReplace(
                         file
@@ -1108,7 +1310,9 @@ function FileUpload({ projectId, onImageSelect }) {
                   {/* DELETE */}
 
                   <button
-                    className="delete-file-btn"
+                    type="button"
+                    className="file-action-btn delete-file-btn"
+                    aria-label={`Delete ${file.file_name}`}
                     onClick={() =>
                       handleDelete(
                         file

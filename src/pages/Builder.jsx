@@ -80,6 +80,9 @@ function Builder() {
   const [loadingProjectImages, setLoadingProjectImages] =
     useState(false);
 
+  const [selectedAIImage, setSelectedAIImage] =
+    useState(null);
+
   /* ========================================================
      SAVE
   ======================================================== */
@@ -400,7 +403,7 @@ function Builder() {
 
   const imageContext = useMemo(
     () => {
-      return projectImages.map(
+      const images = projectImages.map(
         (image) => ({
           id: image.id,
           fileName:
@@ -410,9 +413,147 @@ function Builder() {
           url: image.url,
         })
       );
+
+      if (!selectedAIImage?.url) {
+        return images;
+      }
+
+      const selected = {
+        id: selectedAIImage.id,
+        fileName:
+          selectedAIImage.name ||
+          selectedAIImage.fileName ||
+          "reference-image",
+        fileType:
+          selectedAIImage.type ||
+          selectedAIImage.fileType ||
+          "image/*",
+        url: selectedAIImage.url,
+      };
+
+      return [
+        selected,
+        ...images.filter(
+          (image) =>
+            image.id !== selected.id
+        ),
+      ];
     },
-    [projectImages]
+    [projectImages, selectedAIImage]
   );
+
+  async function syncProjectImages(
+    nextFiles = []
+  ) {
+    const imageFiles = (
+      Array.isArray(nextFiles)
+        ? nextFiles
+        : []
+    ).filter((file) => {
+      const type = file?.file_type || "";
+      const extension =
+        file?.file_name
+          ?.split(".")
+          .pop()
+          ?.toLowerCase();
+
+      return (
+        type.startsWith("image/") ||
+        [
+          "png",
+          "jpg",
+          "jpeg",
+          "webp",
+          "gif",
+          "svg",
+        ].includes(extension)
+      );
+    });
+
+    const imagesWithUrls =
+      await Promise.all(
+        imageFiles.map(async (file) => {
+          try {
+            const {
+              data,
+              error,
+            } = await supabase.storage
+              .from("uploads")
+              .createSignedUrl(
+                file.file_path,
+                60 * 60
+              );
+
+            if (error || !data?.signedUrl) {
+              return null;
+            }
+
+            return {
+              id: file.id,
+              fileName: file.file_name,
+              filePath: file.file_path,
+              fileType:
+                file.file_type || "image/*",
+              fileSize: file.file_size || 0,
+              url: data.signedUrl,
+            };
+          } catch (error) {
+            console.error(
+              "Project image sync error:",
+              error
+            );
+            return null;
+          }
+        })
+      );
+
+    setProjectImages(
+      imagesWithUrls.filter(Boolean)
+    );
+
+    if (
+      selectedAIImage?.id &&
+      !imageFiles.some(
+        (file) =>
+          file.id === selectedAIImage.id
+      )
+    ) {
+      setSelectedAIImage(null);
+    }
+  }
+
+  function handleImageSelect(image) {
+    if (!image?.url) return;
+
+    setSelectedAIImage(image);
+
+    setProjectImages((previous) => {
+      const nextImage = {
+        id: image.id,
+        fileName:
+          image.name ||
+          image.fileName ||
+          "reference-image",
+        filePath:
+          image.path ||
+          image.filePath ||
+          "",
+        fileType:
+          image.type ||
+          image.fileType ||
+          "image/*",
+        fileSize: image.fileSize || 0,
+        url: image.url,
+      };
+
+      const withoutCurrent =
+        previous.filter(
+          (item) => item.id !== nextImage.id
+        );
+
+      return [nextImage, ...withoutCurrent];
+    });
+  }
 
   /* ========================================================
      LIVE CODE REF
@@ -2322,6 +2463,12 @@ ${jsCode}
             <FileUpload
               projectId={
                 projectId
+              }
+              onImageSelect={
+                handleImageSelect
+              }
+              onFilesChange={
+                syncProjectImages
               }
             />
 

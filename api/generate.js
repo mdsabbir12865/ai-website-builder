@@ -527,16 +527,108 @@ export default async function handler(
     }
 
     let image = null;
+    let images = [];
 
     try {
       image = normalizeImage(
         body?.image
       );
+
+      if (Array.isArray(body?.images)) {
+        const validImages = body.images
+          .filter(
+            (item) =>
+              item &&
+              typeof item.url === "string" &&
+              item.url.trim()
+          )
+          .slice(0, 10);
+
+        for (const item of validImages) {
+          try {
+            const response = await fetch(
+              item.url
+            );
+
+            if (!response.ok) {
+              throw new Error(
+                `Image download failed: ${response.status}`
+              );
+            }
+
+            const contentType =
+              response.headers.get("content-type") ||
+              item.fileType ||
+              "image/jpeg";
+
+            if (!contentType.startsWith("image/")) {
+              throw new Error(
+                `URL is not an image: ${contentType}`
+              );
+            }
+
+            const arrayBuffer =
+              await response.arrayBuffer();
+
+            const data =
+              Buffer.from(arrayBuffer).toString(
+                "base64"
+              );
+
+            const approximateBytes =
+              (data.length * 3) / 4;
+
+            if (approximateBytes > MAX_IMAGE_SIZE) {
+              throw new Error(
+                `Reference image "${
+                  item.fileName ||
+                  "project-image"
+                }" is too large.`
+              );
+            }
+
+            images.push({
+              inlineData: {
+                mimeType: contentType,
+                data,
+              },
+              metadata: {
+                id: item.id || null,
+                fileName:
+                  item.fileName ||
+                  "project-image",
+                fileType: contentType,
+                url: item.url,
+              },
+            });
+          } catch (error) {
+            console.error(
+              `[AI] Failed to load image: ${
+                item.fileName || "unknown"
+              }`,
+              error
+            );
+          }
+        }
+      }
     } catch (imageError) {
       return res.status(400).json({
         success: false,
         error:
           imageError.message,
+      });
+    }
+
+    if (image && !images.length) {
+      images.push({
+        inlineData: {
+          mimeType: image.mimeType,
+          data: image.data,
+        },
+        metadata: {
+          fileName: "reference-image",
+          fileType: image.mimeType,
+        },
       });
     }
 
@@ -603,28 +695,25 @@ USER REQUEST:
 ${prompt}
 
 ${
-  image
+  images.length
     ? `
 ==================================================
-REFERENCE IMAGE
+REFERENCE IMAGES
 ==================================================
 
-A reference image is attached to this request.
+${images
+  .map(
+    (item, index) => `Image ${index + 1}: ${
+      item.metadata?.fileName ||
+      "project-image"
+    }`
+  )
+  .join("\n")}
 
-Analyze the image carefully and use it as a visual design reference.
-
-The final website should follow the image's:
-
-- layout
-- spacing
-- typography
-- colors
-- sections
-- component structure
-- visual hierarchy
-- responsive intent
-
-Do not ignore the image.
+Analyze the actual reference image inputs carefully.
+Use them as the primary visual reference for the requested image-to-website task.
+Match their layout, spacing, typography, colors, sections, component structure, visual hierarchy and responsive intent.
+Do not ignore the provided images.
 `
     : ""
 }
@@ -670,14 +759,12 @@ ${existingContext}
           },
         ];
 
-        if (image) {
-          parts.push({
-            inlineData: {
-              mimeType:
-                image.mimeType,
-              data: image.data,
-            },
-          });
+        if (images.length) {
+          parts.push(
+            ...images.map(
+              (item) => item.inlineData
+            )
+          );
         }
 
         const response =
@@ -757,7 +844,8 @@ ${existingContext}
         return res.status(200).json({
           success: true,
           model: MODEL,
-          hasImage: Boolean(image),
+          hasImage: images.length > 0,
+          imageCount: images.length,
           html,
           css,
           js,

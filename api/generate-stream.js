@@ -669,6 +669,18 @@ ${prompt}
 
 ${imageMetadata}
 
+${
+  imageResults.length
+    ? `
+IMPORTANT IMAGE-TO-WEBSITE RULE:
+The supplied images are real visual references, not merely file metadata.
+Inspect the actual image content before writing code. Reconstruct the visible design as closely as reasonably possible: layout, spacing, typography, colors, sizing, borders, shadows, imagery, alignment, section order and responsive behavior.
+If the user asks to recreate the image, prioritize visual fidelity over generic design choices.
+When a supplied project image is intended to appear in the generated website, use its exact URL from PROJECT IMAGES.
+`
+    : ""
+}
+
 ${existingContext}
 `;
 
