@@ -1,56 +1,28 @@
-import {
-  useEffect,
-  useState,
-} from "react";
-
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import "./GitHubConnect.css";
+
 function GitHubConnect() {
-  const [loading, setLoading] =
-    useState(false);
+  const [loading, setLoading] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [connection, setConnection] = useState(null);
+  const [repositories, setRepositories] = useState([]);
+  const [reposLoading, setReposLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const [connected, setConnected] =
-    useState(false);
-
-  const [connection, setConnection] =
-    useState(null);
-
-  const [repositories, setRepositories] =
-    useState([]);
-
-  const [reposLoading, setReposLoading] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  // Create repository states
-  const [repoName, setRepoName] =
-    useState("");
-
-  const [repoDescription, setRepoDescription] =
-    useState("");
-
-  const [repoPrivate, setRepoPrivate] =
-    useState(false);
-
-  const [creatingRepo, setCreatingRepo] =
-    useState(false);
+  const [repoName, setRepoName] = useState("");
+  const [repoDescription, setRepoDescription] = useState("");
+  const [repoPrivate, setRepoPrivate] = useState(false);
+  const [creatingRepo, setCreatingRepo] = useState(false);
 
   async function getAccessToken() {
-    const {
-      data,
-      error,
-    } = await supabase.auth.getSession();
+    const { data, error } = await supabase.auth.getSession();
 
     if (error) {
       throw error;
     }
 
-    return (
-      data?.session?.access_token ||
-      null
-    );
+    return data?.session?.access_token || null;
   }
 
   async function loadRepositories() {
@@ -58,49 +30,33 @@ function GitHubConnect() {
     setError("");
 
     try {
-      const token =
-        await getAccessToken();
+      const token = await getAccessToken();
 
       if (!token) {
-        throw new Error(
-          "Please log in first."
-        );
+        throw new Error("Please log in first.");
       }
 
-      const response =
-        await fetch(
-          "/api/github/repos",
-          {
-            method: "GET",
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
+      const response = await fetch("/api/github/repos", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.error ||
-            "Unable to load repositories."
+          data.error || "Unable to load repositories."
         );
       }
 
-      setRepositories(
-        data.repositories || []
-      );
+      setRepositories(data.repositories || []);
     } catch (error) {
-      console.error(
-        "GitHub repositories error:",
-        error
-      );
+      console.error("GitHub repositories error:", error);
 
       setError(
-        error?.message ||
-          "Unable to load repositories."
+        error?.message || "Unable to load repositories."
       );
     } finally {
       setReposLoading(false);
@@ -109,70 +65,45 @@ function GitHubConnect() {
 
   async function loadStatus() {
     try {
-      const token =
-        await getAccessToken();
+      const token = await getAccessToken();
 
       if (!token) {
         return;
       }
 
-      const response =
-        await fetch(
-          "/api/github/status",
-          {
-            method: "GET",
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
+      const response = await fetch("/api/github/status", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.error ||
-            "Unable to check GitHub."
+          data.error || "Unable to check GitHub."
         );
       }
 
-      const isConnected =
-        Boolean(data.connected);
+      const isConnected = Boolean(data.connected);
 
       setConnected(isConnected);
-
-      setConnection(
-        data.connection || null
-      );
+      setConnection(data.connection || null);
 
       if (isConnected) {
         await loadRepositories();
       }
     } catch (error) {
-      console.error(
-        "GitHub status error:",
-        error
-      );
+      console.error("GitHub status error:", error);
     }
   }
 
   useEffect(() => {
-    const params =
-      new URLSearchParams(
-        window.location.search
-      );
+    const params = new URLSearchParams(window.location.search);
 
-    const githubConnected =
-      params.get(
-        "github_connected"
-      );
-
-    const githubError =
-      params.get(
-        "github_error"
-      );
+    const githubConnected = params.get("github_connected");
+    const githubError = params.get("github_error");
 
     if (githubError) {
       setError(githubError);
@@ -194,40 +125,28 @@ function GitHubConnect() {
     setError("");
 
     try {
-      const token =
-        await getAccessToken();
+      const token = await getAccessToken();
 
       if (!token) {
-        throw new Error(
-          "Please log in first."
-        );
+        throw new Error("Please log in first.");
       }
 
-      const response =
-        await fetch(
-          "/api/github/connect",
-          {
-            method: "POST",
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              returnTo:
-                window.location.pathname,
-            }),
-          }
-        );
+      const response = await fetch("/api/github/connect", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          returnTo: window.location.pathname,
+        }),
+      });
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.error ||
-            "Unable to connect GitHub."
+          data.error || "Unable to connect GitHub."
         );
       }
 
@@ -237,35 +156,25 @@ function GitHubConnect() {
         );
       }
 
-      window.location.href =
-        data.authorizationUrl;
+      window.location.href = data.authorizationUrl;
     } catch (error) {
-      console.error(
-        "GitHub connect error:",
-        error
-      );
+      console.error("GitHub connect error:", error);
 
       setError(
-        error?.message ||
-          "GitHub connection failed."
+        error?.message || "GitHub connection failed."
       );
 
       setLoading(false);
     }
   }
 
-  async function handleCreateRepository(
-    event
-  ) {
+  async function handleCreateRepository(event) {
     event.preventDefault();
 
-    const name =
-      repoName.trim();
+    const name = repoName.trim();
 
     if (!name) {
-      setError(
-        "Repository name is required."
-      );
+      setError("Repository name is required.");
       return;
     }
 
@@ -273,43 +182,33 @@ function GitHubConnect() {
     setError("");
 
     try {
-      const token =
-        await getAccessToken();
+      const token = await getAccessToken();
 
       if (!token) {
-        throw new Error(
-          "Please log in first."
-        );
+        throw new Error("Please log in first.");
       }
 
-      const response =
-        await fetch(
-          "/api/github/create-repo",
-          {
-            method: "POST",
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              name,
-              description:
-                repoDescription.trim(),
-              private:
-                repoPrivate,
-            }),
-          }
-        );
+      const response = await fetch(
+        "/api/github/create-repo",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            description: repoDescription.trim(),
+            private: repoPrivate,
+          }),
+        }
+      );
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.error ||
-            "Unable to create repository."
+          data.error || "Unable to create repository."
         );
       }
 
@@ -319,10 +218,7 @@ function GitHubConnect() {
 
       await loadRepositories();
     } catch (error) {
-      console.error(
-        "Create repository error:",
-        error
-      );
+      console.error("Create repository error:", error);
 
       setError(
         error?.message ||
@@ -338,34 +234,27 @@ function GitHubConnect() {
     setError("");
 
     try {
-      const token =
-        await getAccessToken();
+      const token = await getAccessToken();
 
       if (!token) {
-        throw new Error(
-          "Please log in first."
-        );
+        throw new Error("Please log in first.");
       }
 
-      const response =
-        await fetch(
-          "/api/github/disconnect",
-          {
-            method: "POST",
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
+      const response = await fetch(
+        "/api/github/disconnect",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.error ||
-            "Disconnect failed."
+          data.error || "Disconnect failed."
         );
       }
 
@@ -374,14 +263,10 @@ function GitHubConnect() {
       setRepositories([]);
       setError("");
     } catch (error) {
-      console.error(
-        "GitHub disconnect error:",
-        error
-      );
+      console.error("GitHub disconnect error:", error);
 
       setError(
-        error?.message ||
-          "Disconnect failed."
+        error?.message || "Disconnect failed."
       );
     } finally {
       setLoading(false);
@@ -390,142 +275,71 @@ function GitHubConnect() {
 
   if (connected) {
     return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px",
-          width: "100%",
-          maxWidth: "600px",
-        }}
-      >
+      <div className="github-connect">
         <button
           type="button"
-          onClick={
-            handleDisconnect
-          }
+          className="github-connected"
+          onClick={handleDisconnect}
           disabled={loading}
         >
-          ✓ GitHub Connected
-          {connection?.login
-            ? ` — ${connection.login}`
-            : ""}
+          <span>✓ GitHub Connected</span>
+
+          {connection?.login && (
+            <span className="github-login">
+              — {connection.login}
+            </span>
+          )}
         </button>
 
-        {/* CREATE REPOSITORY */}
         <form
-          onSubmit={
-            handleCreateRepository
-          }
-          style={{
-            border:
-              "1px solid #e5e7eb",
-            borderRadius: "12px",
-            padding: "16px",
-            background: "#fff",
-          }}
+          onSubmit={handleCreateRepository}
+          className="github-card"
         >
-          <strong>
+          <div className="github-card-title">
             Create New Repository
-          </strong>
+          </div>
 
           <input
             type="text"
+            className="github-input"
             placeholder="Repository name"
             value={repoName}
             onChange={(event) =>
-              setRepoName(
-                event.target.value
-              )
+              setRepoName(event.target.value)
             }
-            disabled={
-              creatingRepo
-            }
-            style={{
-              width: "100%",
-              marginTop: "12px",
-              padding: "10px",
-              boxSizing:
-                "border-box",
-              border:
-                "1px solid #d1d5db",
-              borderRadius: "8px",
-            }}
+            disabled={creatingRepo}
           />
 
           <textarea
+            className="github-textarea"
             placeholder="Description (optional)"
-            value={
-              repoDescription
-            }
+            value={repoDescription}
             onChange={(event) =>
-              setRepoDescription(
-                event.target.value
-              )
+              setRepoDescription(event.target.value)
             }
-            disabled={
-              creatingRepo
-            }
+            disabled={creatingRepo}
             rows={3}
-            style={{
-              width: "100%",
-              marginTop: "8px",
-              padding: "10px",
-              boxSizing:
-                "border-box",
-              border:
-                "1px solid #d1d5db",
-              borderRadius: "8px",
-              resize: "vertical",
-            }}
           />
 
-          <label
-            style={{
-              display: "flex",
-              alignItems:
-                "center",
-              gap: "8px",
-              marginTop: "10px",
-            }}
-          >
+          <label className="github-checkbox">
             <input
               type="checkbox"
-              checked={
-                repoPrivate
-              }
+              checked={repoPrivate}
               onChange={(event) =>
-                setRepoPrivate(
-                  event.target.checked
-                )
+                setRepoPrivate(event.target.checked)
               }
-              disabled={
-                creatingRepo
-              }
+              disabled={creatingRepo}
             />
 
-            Private repository
+            <span>Private repository</span>
           </label>
 
           <button
             type="submit"
+            className="github-create-button"
             disabled={
-              creatingRepo ||
-              !repoName.trim()
+              creatingRepo || !repoName.trim()
             }
-            style={{
-              marginTop: "12px",
-              padding:
-                "10px 16px",
-              border: "none",
-              borderRadius:
-                "8px",
-              cursor:
-                creatingRepo ||
-                !repoName.trim()
-                  ? "not-allowed"
-                  : "pointer",
-            }}
           >
             {creatingRepo
               ? "Creating..."
@@ -533,206 +347,106 @@ function GitHubConnect() {
           </button>
         </form>
 
-        {/* REPOSITORY LIST */}
-        <div
-          style={{
-            border:
-              "1px solid #e5e7eb",
-            borderRadius: "12px",
-            padding: "16px",
-            background: "#fff",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems:
-                "center",
-              justifyContent:
-                "space-between",
-              marginBottom:
-                "12px",
-            }}
-          >
-            <strong>
+        <div className="github-card">
+          <div className="github-repo-header">
+            <div className="github-card-title">
               GitHub Repositories
-            </strong>
+            </div>
 
             <button
               type="button"
-              onClick={
-                loadRepositories
-              }
-              disabled={
-                reposLoading
-              }
+              className="github-refresh-button"
+              onClick={loadRepositories}
+              disabled={reposLoading}
             >
-              {reposLoading
-                ? "Loading..."
-                : "Refresh"}
+              {reposLoading ? "Loading..." : "Refresh"}
             </button>
           </div>
 
           {reposLoading &&
-            repositories.length ===
-              0 && (
-              <p>
+            repositories.length === 0 && (
+              <p className="github-muted">
                 Loading repositories...
               </p>
             )}
 
           {!reposLoading &&
-            repositories.length ===
-              0 &&
+            repositories.length === 0 &&
             !error && (
-              <p>
+              <p className="github-muted">
                 No repositories found.
               </p>
             )}
 
-          {repositories.length >
-            0 && (
-            <div
-              style={{
-                display:
-                  "flex",
-                flexDirection:
-                  "column",
-                gap: "8px",
-                maxHeight:
-                  "320px",
-                overflowY:
-                  "auto",
-              }}
-            >
-              {repositories.map(
-                (repo) => (
-                  <div
-                    key={repo.id}
-                    style={{
-                      display:
-                        "flex",
-                      alignItems:
-                        "center",
-                      justifyContent:
-                        "space-between",
-                      gap: "12px",
-                      padding:
-                        "12px",
-                      border:
-                        "1px solid #e5e7eb",
-                      borderRadius:
-                        "8px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        minWidth: 0,
-                      }}
-                    >
-                      <strong>
-                        {repo.name}
-                      </strong>
+          {repositories.length > 0 && (
+            <div className="github-repo-list">
+              {repositories.map((repo) => (
+                <div
+                  key={repo.id}
+                  className="github-repo"
+                >
+                  <div className="github-repo-info">
+                    <strong>{repo.name}</strong>
 
-                      <div
-                        style={{
-                          fontSize:
-                            "12px",
-                          color:
-                            "#6b7280",
-                          marginTop:
-                            "4px",
-                        }}
-                      >
-                        {repo.private
-                          ? "Private"
-                          : "Public"}
+                    <div className="github-repo-meta">
+                      {repo.private
+                        ? "Private"
+                        : "Public"}
 
-                        {" · "}
+                      {" · "}
 
-                        {repo.default_branch ||
-                          "main"}
-                      </div>
-
-                      {repo.description && (
-                        <div
-                          style={{
-                            fontSize:
-                              "13px",
-                            color:
-                              "#6b7280",
-                            marginTop:
-                              "4px",
-                          }}
-                        >
-                          {
-                            repo.description
-                          }
-                        </div>
-                      )}
+                      {repo.default_branch || "main"}
                     </div>
 
-                    <a
-                      href={
-                        repo.html_url
-                      }
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      View
-                    </a>
+                    {repo.description && (
+                      <div className="github-repo-description">
+                        {repo.description}
+                      </div>
+                    )}
                   </div>
-                )
-              )}
+
+                  <a
+                    href={repo.html_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="github-view-link"
+                  >
+                    View
+                  </a>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
         {error && (
-          <small
-            style={{
-              color:
-                "#dc2626",
-            }}
-          >
+          <div className="github-error">
             {error}
-          </small>
+          </div>
         )}
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection:
-          "column",
-        gap: "8px",
-      }}
-    >
+    <div className="github-connect github-connect-only">
       <button
         type="button"
-        onClick={
-          handleConnect
-        }
+        className="github-connect-button"
+        onClick={handleConnect}
         disabled={loading}
       >
-        ◇{" "}
+        <span className="github-symbol">◇</span>
+
         {loading
           ? "Connecting..."
           : "Connect GitHub"}
       </button>
 
       {error && (
-        <small
-          style={{
-            color:
-              "#dc2626",
-          }}
-        >
+        <div className="github-error">
           {error}
-        </small>
+        </div>
       )}
     </div>
   );
