@@ -8,14 +8,9 @@ import {
   clearCookie,
 } from "./_utils.js";
 
-export default async function handler(
-  req,
-  res
-) {
+export default async function handler(req, res) {
   if (req.method !== "GET") {
-    return res.status(405).send(
-      "Method not allowed."
-    );
+    return res.status(405).send("Method not allowed.");
   }
 
   const {
@@ -27,11 +22,10 @@ export default async function handler(
 
   if (error) {
     return res.redirect(
-  `/dashboard?github_error=${encodeURIComponent(
-    error_description ||
-      error
-  )}`
-);
+      `/dashboard?github_error=${encodeURIComponent(
+        error_description || error
+      )}`
+    );
   }
 
   if (!code || !state) {
@@ -41,8 +35,7 @@ export default async function handler(
   }
 
   try {
-    const payload =
-      verifyOAuthState(state);
+    const payload = verifyOAuthState(state);
 
     if (!payload?.userId) {
       return res.status(400).send(
@@ -50,31 +43,24 @@ export default async function handler(
       );
     }
 
-    const tokenResponse =
-      await fetch(
-        "https://github.com/login/oauth/access_token",
-        {
-          method: "POST",
-          headers: {
-            Accept:
-              "application/json",
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            client_id:
-              GITHUB_CLIENT_ID,
-            client_secret:
-              GITHUB_CLIENT_SECRET,
-            code,
-            redirect_uri:
-              GITHUB_REDIRECT_URI,
-          }),
-        }
-      );
+    const tokenResponse = await fetch(
+      "https://github.com/login/oauth/access_token",
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          client_id: GITHUB_CLIENT_ID,
+          client_secret: GITHUB_CLIENT_SECRET,
+          code,
+          redirect_uri: GITHUB_REDIRECT_URI,
+        }),
+      }
+    );
 
-    const tokenData =
-      await tokenResponse.json();
+    const tokenData = await tokenResponse.json();
 
     if (
       !tokenResponse.ok ||
@@ -84,30 +70,28 @@ export default async function handler(
         "GitHub token exchange failed:",
         tokenData
       );
-return res.redirect(
-  `/dashboard?github_error=${encodeURIComponent(
+
+      return res.redirect(
+        `/dashboard?github_error=${encodeURIComponent(
           "GitHub authorization failed."
         )}`
       );
     }
 
-    const accessToken =
-      tokenData.access_token;
+    const accessToken = tokenData.access_token;
 
-    const githubResponse =
-      await fetch(
-        "https://api.github.com/user",
-        {
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-            Accept:
-              "application/vnd.github+json",
-            "X-GitHub-Api-Version":
-              "2022-11-28",
-          },
-        }
-      );
+    const githubResponse = await fetch(
+      "https://api.github.com/user",
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept:
+            "application/vnd.github+json",
+          "X-GitHub-Api-Version":
+            "2022-11-28",
+        },
+      }
+    );
 
     if (!githubResponse.ok) {
       throw new Error(
@@ -118,8 +102,7 @@ return res.redirect(
     const githubUser =
       await githubResponse.json();
 
-    const supabase =
-      getAdminSupabase();
+    const supabase = getAdminSupabase();
 
     const encryptedToken =
       encryptToken(accessToken);
@@ -129,25 +112,18 @@ return res.redirect(
         .from("github_connections")
         .upsert(
           {
-            user_id:
-              payload.userId,
-            github_id:
-              githubUser.id,
-            github_login:
-              githubUser.login,
+            user_id: payload.userId,
+            github_id: githubUser.id,
+            github_login: githubUser.login,
             github_avatar_url:
-              githubUser.avatar_url ||
-              null,
-            access_token:
-              encryptedToken,
-            scope:
-              tokenData.scope || "",
+              githubUser.avatar_url || null,
+            access_token: encryptedToken,
+            scope: tokenData.scope || "",
             updated_at:
               new Date().toISOString(),
           },
           {
-            onConflict:
-              "user_id",
+            onConflict: "user_id",
           }
         );
 
@@ -159,37 +135,33 @@ return res.redirect(
       res,
       "github_oauth_state"
     );
-const returnTo =
-  typeof payload.returnTo === "string" &&
-  payload.returnTo.startsWith("/builder/")
-    ? payload.returnTo
-    : "/dashboard";
-const returnTo =
-  typeof payload.returnTo === "string" &&
-  payload.returnTo.startsWith("/builder/")
-    ? payload.returnTo
-    : "/dashboard";
 
-return res.redirect(
-  `${returnTo}${
-    returnTo.includes("?")
-      ? "&"
-      : "?"
-  }github_connected=1`
-);
+    const returnTo =
+      payload.returnTo &&
+      payload.returnTo.startsWith(
+        "/builder/"
+      )
+        ? payload.returnTo
+        : "/dashboard";
+
+    const separator =
+      returnTo.includes("?")
+        ? "&"
+        : "?";
+
+    return res.redirect(
+      `${returnTo}${separator}github_connected=1`
+    );
   } catch (error) {
     console.error(
       "GitHub callback error:",
       error
     );
-const returnTo =
-  "/dashboard";
 
-return res.redirect(
-  `${returnTo}?github_error=${encodeURIComponent(
-    error_description ||
-      error
-  )}`
-);
+    return res.redirect(
+      `/dashboard?github_error=${encodeURIComponent(
+        "GitHub connection failed."
+      )}`
+    );
   }
 }

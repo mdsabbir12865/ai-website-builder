@@ -202,18 +202,23 @@ try {
       const token =
         await getAccessToken();
 
-      const response =
-        await fetch(
-          "/api/github/disconnect",
-          {
-            method: "POST",
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
-
+const response =
+  await fetch(
+    "/api/github/connect",
+    {
+      method: "POST",
+      headers: {
+        Authorization:
+          `Bearer ${token}`,
+        "Content-Type":
+          "application/json",
+      },
+      body: JSON.stringify({
+        returnTo:
+          window.location.pathname,
+      }),
+    }
+  );
       const data =
         await response.json();
 
