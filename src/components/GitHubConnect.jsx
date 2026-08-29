@@ -23,16 +23,25 @@ function GitHubConnect() {
 
   const [error, setError] =
     useState("");
-const [repoName, setRepoName] = useState("");
-const [repoDescription, setRepoDescription] = useState("");
-const [repoPrivate, setRepoPrivate] = useState(false);
-const [creatingRepo, setCreatingRepo] = useState(false);
+
+  // Create repository states
+  const [repoName, setRepoName] =
+    useState("");
+
+  const [repoDescription, setRepoDescription] =
+    useState("");
+
+  const [repoPrivate, setRepoPrivate] =
+    useState(false);
+
+  const [creatingRepo, setCreatingRepo] =
+    useState(false);
+
   async function getAccessToken() {
     const {
       data,
       error,
-    } =
-      await supabase.auth.getSession();
+    } = await supabase.auth.getSession();
 
     if (error) {
       throw error;
@@ -42,55 +51,6 @@ const [creatingRepo, setCreatingRepo] = useState(false);
       data?.session?.access_token ||
       null
     );
-  }
-
-  async function loadStatus() {
-    try {
-      const token =
-        await getAccessToken();
-
-      if (!token) {
-        return;
-      }
-
-      const response =
-        await fetch(
-          "/api/github/status",
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error ||
-            "Unable to check GitHub."
-        );
-      }
-
-      setConnected(
-        Boolean(data.connected)
-      );
-
-      setConnection(
-        data.connection || null
-      );
-
-      if (data.connected) {
-        await loadRepositories();
-      }
-    } catch (error) {
-      console.error(
-        "GitHub status error:",
-        error
-      );
-    }
   }
 
   async function loadRepositories() {
@@ -111,6 +71,7 @@ const [creatingRepo, setCreatingRepo] = useState(false);
         await fetch(
           "/api/github/repos",
           {
+            method: "GET",
             headers: {
               Authorization:
                 `Bearer ${token}`,
@@ -146,9 +107,58 @@ const [creatingRepo, setCreatingRepo] = useState(false);
     }
   }
 
-  useEffect(() => {
-    loadStatus();
+  async function loadStatus() {
+    try {
+      const token =
+        await getAccessToken();
 
+      if (!token) {
+        return;
+      }
+
+      const response =
+        await fetch(
+          "/api/github/status",
+          {
+            method: "GET",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Unable to check GitHub."
+        );
+      }
+
+      const isConnected =
+        Boolean(data.connected);
+
+      setConnected(isConnected);
+
+      setConnection(
+        data.connection || null
+      );
+
+      if (isConnected) {
+        await loadRepositories();
+      }
+    } catch (error) {
+      console.error(
+        "GitHub status error:",
+        error
+      );
+    }
+  }
+
+  useEffect(() => {
     const params =
       new URLSearchParams(
         window.location.search
@@ -164,29 +174,19 @@ const [creatingRepo, setCreatingRepo] = useState(false);
         "github_error"
       );
 
-    if (githubConnected === "1") {
-      setConnected(true);
-
-      window.history.replaceState(
-        {},
-        "",
-        window.location.pathname
-      );
-
-      loadStatus();
-    }
-
     if (githubError) {
-      setError(
-        githubError
-      );
+      setError(githubError);
+    }
 
+    if (githubConnected === "1") {
       window.history.replaceState(
         {},
         "",
         window.location.pathname
       );
     }
+
+    loadStatus();
   }, []);
 
   async function handleConnect() {
@@ -231,6 +231,12 @@ const [creatingRepo, setCreatingRepo] = useState(false);
         );
       }
 
+      if (!data.authorizationUrl) {
+        throw new Error(
+          "GitHub authorization URL is missing."
+        );
+      }
+
       window.location.href =
         data.authorizationUrl;
     } catch (error) {
@@ -248,6 +254,85 @@ const [creatingRepo, setCreatingRepo] = useState(false);
     }
   }
 
+  async function handleCreateRepository(
+    event
+  ) {
+    event.preventDefault();
+
+    const name =
+      repoName.trim();
+
+    if (!name) {
+      setError(
+        "Repository name is required."
+      );
+      return;
+    }
+
+    setCreatingRepo(true);
+    setError("");
+
+    try {
+      const token =
+        await getAccessToken();
+
+      if (!token) {
+        throw new Error(
+          "Please log in first."
+        );
+      }
+
+      const response =
+        await fetch(
+          "/api/github/create-repo",
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              name,
+              description:
+                repoDescription.trim(),
+              private:
+                repoPrivate,
+            }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Unable to create repository."
+        );
+      }
+
+      setRepoName("");
+      setRepoDescription("");
+      setRepoPrivate(false);
+
+      await loadRepositories();
+    } catch (error) {
+      console.error(
+        "Create repository error:",
+        error
+      );
+
+      setError(
+        error?.message ||
+          "Unable to create repository."
+      );
+    } finally {
+      setCreatingRepo(false);
+    }
+  }
+
   async function handleDisconnect() {
     setLoading(true);
     setError("");
@@ -255,6 +340,12 @@ const [creatingRepo, setCreatingRepo] = useState(false);
     try {
       const token =
         await getAccessToken();
+
+      if (!token) {
+        throw new Error(
+          "Please log in first."
+        );
+      }
 
       const response =
         await fetch(
@@ -281,6 +372,7 @@ const [creatingRepo, setCreatingRepo] = useState(false);
       setConnected(false);
       setConnection(null);
       setRepositories([]);
+      setError("");
     } catch (error) {
       console.error(
         "GitHub disconnect error:",
@@ -320,6 +412,128 @@ const [creatingRepo, setCreatingRepo] = useState(false);
             : ""}
         </button>
 
+        {/* CREATE REPOSITORY */}
+        <form
+          onSubmit={
+            handleCreateRepository
+          }
+          style={{
+            border:
+              "1px solid #e5e7eb",
+            borderRadius: "12px",
+            padding: "16px",
+            background: "#fff",
+          }}
+        >
+          <strong>
+            Create New Repository
+          </strong>
+
+          <input
+            type="text"
+            placeholder="Repository name"
+            value={repoName}
+            onChange={(event) =>
+              setRepoName(
+                event.target.value
+              )
+            }
+            disabled={
+              creatingRepo
+            }
+            style={{
+              width: "100%",
+              marginTop: "12px",
+              padding: "10px",
+              boxSizing:
+                "border-box",
+              border:
+                "1px solid #d1d5db",
+              borderRadius: "8px",
+            }}
+          />
+
+          <textarea
+            placeholder="Description (optional)"
+            value={
+              repoDescription
+            }
+            onChange={(event) =>
+              setRepoDescription(
+                event.target.value
+              )
+            }
+            disabled={
+              creatingRepo
+            }
+            rows={3}
+            style={{
+              width: "100%",
+              marginTop: "8px",
+              padding: "10px",
+              boxSizing:
+                "border-box",
+              border:
+                "1px solid #d1d5db",
+              borderRadius: "8px",
+              resize: "vertical",
+            }}
+          />
+
+          <label
+            style={{
+              display: "flex",
+              alignItems:
+                "center",
+              gap: "8px",
+              marginTop: "10px",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={
+                repoPrivate
+              }
+              onChange={(event) =>
+                setRepoPrivate(
+                  event.target.checked
+                )
+              }
+              disabled={
+                creatingRepo
+              }
+            />
+
+            Private repository
+          </label>
+
+          <button
+            type="submit"
+            disabled={
+              creatingRepo ||
+              !repoName.trim()
+            }
+            style={{
+              marginTop: "12px",
+              padding:
+                "10px 16px",
+              border: "none",
+              borderRadius:
+                "8px",
+              cursor:
+                creatingRepo ||
+                !repoName.trim()
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+          >
+            {creatingRepo
+              ? "Creating..."
+              : "Create Repository"}
+          </button>
+        </form>
+
+        {/* REPOSITORY LIST */}
         <div
           style={{
             border:
@@ -332,10 +546,12 @@ const [creatingRepo, setCreatingRepo] = useState(false);
           <div
             style={{
               display: "flex",
-              alignItems: "center",
+              alignItems:
+                "center",
               justifyContent:
                 "space-between",
-              marginBottom: "12px",
+              marginBottom:
+                "12px",
             }}
           >
             <strong>
@@ -347,7 +563,9 @@ const [creatingRepo, setCreatingRepo] = useState(false);
               onClick={
                 loadRepositories
               }
-              disabled={reposLoading}
+              disabled={
+                reposLoading
+              }
             >
               {reposLoading
                 ? "Loading..."
@@ -356,29 +574,35 @@ const [creatingRepo, setCreatingRepo] = useState(false);
           </div>
 
           {reposLoading &&
-            repositories.length === 0 && (
+            repositories.length ===
+              0 && (
               <p>
                 Loading repositories...
               </p>
             )}
 
           {!reposLoading &&
-            repositories.length === 0 &&
+            repositories.length ===
+              0 &&
             !error && (
               <p>
                 No repositories found.
               </p>
             )}
 
-          {repositories.length > 0 && (
+          {repositories.length >
+            0 && (
             <div
               style={{
-                display: "flex",
+                display:
+                  "flex",
                 flexDirection:
                   "column",
                 gap: "8px",
-                maxHeight: "320px",
-                overflowY: "auto",
+                maxHeight:
+                  "320px",
+                overflowY:
+                  "auto",
               }}
             >
               {repositories.map(
@@ -386,7 +610,8 @@ const [creatingRepo, setCreatingRepo] = useState(false);
                   <div
                     key={repo.id}
                     style={{
-                      display: "flex",
+                      display:
+                        "flex",
                       alignItems:
                         "center",
                       justifyContent:
@@ -420,8 +645,8 @@ const [creatingRepo, setCreatingRepo] = useState(false);
                         }}
                       >
                         {repo.private
-                          ? "🔒 Private"
-                          : "🌐 Public"}
+                          ? "Private"
+                          : "Public"}
 
                         {" · "}
 
@@ -466,7 +691,8 @@ const [creatingRepo, setCreatingRepo] = useState(false);
         {error && (
           <small
             style={{
-              color: "#dc2626",
+              color:
+                "#dc2626",
             }}
           >
             {error}
@@ -480,7 +706,8 @@ const [creatingRepo, setCreatingRepo] = useState(false);
     <div
       style={{
         display: "flex",
-        flexDirection: "column",
+        flexDirection:
+          "column",
         gap: "8px",
       }}
     >
@@ -500,7 +727,8 @@ const [creatingRepo, setCreatingRepo] = useState(false);
       {error && (
         <small
           style={{
-            color: "#dc2626",
+            color:
+              "#dc2626",
           }}
         >
           {error}
