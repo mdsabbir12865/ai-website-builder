@@ -15,6 +15,12 @@ function GitHubConnect() {
   const [connection, setConnection] =
     useState(null);
 
+  const [repositories, setRepositories] =
+    useState([]);
+
+  const [reposLoading, setReposLoading] =
+    useState(false);
+
   const [error, setError] =
     useState("");
 
@@ -43,37 +49,21 @@ function GitHubConnect() {
       if (!token) {
         return;
       }
-const response =
-  await fetch(
-    "/api/github/connect",
-    {
-      method: "POST",
-      headers: {
-        Authorization:
-          `Bearer ${token}`,
-        "Content-Type":
-          "application/json",
-      },
-      body: JSON.stringify({
-        returnTo:
-          window.location.pathname +
-          window.location.search,
-      }),
-    }
-  );
-const text =
-  await response.text();
 
-let data;
+      const response =
+        await fetch(
+          "/api/github/status",
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
 
-try {
-  data = JSON.parse(text);
-} catch {
-  throw new Error(
-    text ||
-      "Server returned an invalid response."
-  );
-}
+      const data =
+        await response.json();
+
       if (!response.ok) {
         throw new Error(
           data.error ||
@@ -88,11 +78,68 @@ try {
       setConnection(
         data.connection || null
       );
+
+      if (data.connected) {
+        await loadRepositories();
+      }
     } catch (error) {
       console.error(
         "GitHub status error:",
         error
       );
+    }
+  }
+
+  async function loadRepositories() {
+    setReposLoading(true);
+    setError("");
+
+    try {
+      const token =
+        await getAccessToken();
+
+      if (!token) {
+        throw new Error(
+          "Please log in first."
+        );
+      }
+
+      const response =
+        await fetch(
+          "/api/github/repos",
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Unable to load repositories."
+        );
+      }
+
+      setRepositories(
+        data.repositories || []
+      );
+    } catch (error) {
+      console.error(
+        "GitHub repositories error:",
+        error
+      );
+
+      setError(
+        error?.message ||
+          "Unable to load repositories."
+      );
+    } finally {
+      setReposLoading(false);
     }
   }
 
@@ -164,6 +211,10 @@ try {
               "Content-Type":
                 "application/json",
             },
+            body: JSON.stringify({
+              returnTo:
+                window.location.pathname,
+            }),
           }
         );
 
@@ -202,23 +253,18 @@ try {
       const token =
         await getAccessToken();
 
-const response =
-  await fetch(
-    "/api/github/connect",
-    {
-      method: "POST",
-      headers: {
-        Authorization:
-          `Bearer ${token}`,
-        "Content-Type":
-          "application/json",
-      },
-      body: JSON.stringify({
-        returnTo:
-          window.location.pathname,
-      }),
-    }
-  );
+      const response =
+        await fetch(
+          "/api/github/disconnect",
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
       const data =
         await response.json();
 
@@ -231,6 +277,7 @@ const response =
 
       setConnected(false);
       setConnection(null);
+      setRepositories([]);
     } catch (error) {
       console.error(
         "GitHub disconnect error:",
@@ -252,7 +299,9 @@ const response =
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: "8px",
+          gap: "12px",
+          width: "100%",
+          maxWidth: "600px",
         }}
       >
         <button
@@ -267,6 +316,149 @@ const response =
             ? ` — ${connection.login}`
             : ""}
         </button>
+
+        <div
+          style={{
+            border:
+              "1px solid #e5e7eb",
+            borderRadius: "12px",
+            padding: "16px",
+            background: "#fff",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent:
+                "space-between",
+              marginBottom: "12px",
+            }}
+          >
+            <strong>
+              GitHub Repositories
+            </strong>
+
+            <button
+              type="button"
+              onClick={
+                loadRepositories
+              }
+              disabled={reposLoading}
+            >
+              {reposLoading
+                ? "Loading..."
+                : "Refresh"}
+            </button>
+          </div>
+
+          {reposLoading &&
+            repositories.length === 0 && (
+              <p>
+                Loading repositories...
+              </p>
+            )}
+
+          {!reposLoading &&
+            repositories.length === 0 &&
+            !error && (
+              <p>
+                No repositories found.
+              </p>
+            )}
+
+          {repositories.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection:
+                  "column",
+                gap: "8px",
+                maxHeight: "320px",
+                overflowY: "auto",
+              }}
+            >
+              {repositories.map(
+                (repo) => (
+                  <div
+                    key={repo.id}
+                    style={{
+                      display: "flex",
+                      alignItems:
+                        "center",
+                      justifyContent:
+                        "space-between",
+                      gap: "12px",
+                      padding:
+                        "12px",
+                      border:
+                        "1px solid #e5e7eb",
+                      borderRadius:
+                        "8px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        minWidth: 0,
+                      }}
+                    >
+                      <strong>
+                        {repo.name}
+                      </strong>
+
+                      <div
+                        style={{
+                          fontSize:
+                            "12px",
+                          color:
+                            "#6b7280",
+                          marginTop:
+                            "4px",
+                        }}
+                      >
+                        {repo.private
+                          ? "🔒 Private"
+                          : "🌐 Public"}
+
+                        {" · "}
+
+                        {repo.default_branch ||
+                          "main"}
+                      </div>
+
+                      {repo.description && (
+                        <div
+                          style={{
+                            fontSize:
+                              "13px",
+                            color:
+                              "#6b7280",
+                            marginTop:
+                              "4px",
+                          }}
+                        >
+                          {
+                            repo.description
+                          }
+                        </div>
+                      )}
+                    </div>
+
+                    <a
+                      href={
+                        repo.html_url
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      View
+                    </a>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </div>
 
         {error && (
           <small
