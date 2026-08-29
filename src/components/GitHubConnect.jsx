@@ -23,7 +23,10 @@ function GitHubConnect() {
 
   const [error, setError] =
     useState("");
-
+const [repoName, setRepoName] = useState("");
+const [repoDescription, setRepoDescription] = useState("");
+const [repoPrivate, setRepoPrivate] = useState(false);
+const [creatingRepo, setCreatingRepo] = useState(false);
   async function getAccessToken() {
     const {
       data,
