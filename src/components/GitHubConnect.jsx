@@ -4,7 +4,7 @@ import {
 } from "react";
 
 import { supabase } from "../lib/supabase";
-
+import "./GitHubConnect.css";
 function GitHubConnect() {
   const [loading, setLoading] =
     useState(false);
