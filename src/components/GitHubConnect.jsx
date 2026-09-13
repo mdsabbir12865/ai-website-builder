@@ -6,6 +6,9 @@ function GitHubConnect() {
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [connection, setConnection] = useState(null);
+
+  const [showGitHubPanel, setShowGitHubPanel] = useState(false);
+
   const [repositories, setRepositories] = useState([]);
   const [reposLoading, setReposLoading] = useState(false);
   const [error, setError] = useState("");
@@ -23,6 +26,34 @@ function GitHubConnect() {
     }
 
     return data?.session?.access_token || null;
+  }
+
+  // Safely read API response.
+  // Prevents "Unexpected token '<'" when server returns HTML.
+  async function readApiResponse(response) {
+    const text = await response.text();
+
+    let data = {};
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = {
+        error:
+          text ||
+          `Request failed with status ${response.status}.`,
+      };
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+          data.message ||
+          `Request failed with status ${response.status}.`
+      );
+    }
+
+    return data;
   }
 
   async function loadRepositories() {
@@ -43,20 +74,18 @@ function GitHubConnect() {
         },
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Unable to load repositories."
-        );
-      }
+      const data = await readApiResponse(response);
 
       setRepositories(data.repositories || []);
     } catch (error) {
-      console.error("GitHub repositories error:", error);
+      console.error(
+        "GitHub repositories error:",
+        error
+      );
 
       setError(
-        error?.message || "Unable to load repositories."
+        error?.message ||
+          "Unable to load repositories."
       );
     } finally {
       setReposLoading(false);
@@ -71,39 +100,44 @@ function GitHubConnect() {
         return;
       }
 
-      const response = await fetch("/api/github/status", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        "/api/github/status",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Unable to check GitHub."
-        );
-      }
+      const data = await readApiResponse(response);
 
       const isConnected = Boolean(data.connected);
 
       setConnected(isConnected);
       setConnection(data.connection || null);
 
-      if (isConnected) {
-        await loadRepositories();
-      }
+      // IMPORTANT:
+      // Do NOT automatically open repositories.
+      // User must click "GitHub Connected" first.
     } catch (error) {
-      console.error("GitHub status error:", error);
+      console.error(
+        "GitHub status error:",
+        error
+      );
     }
   }
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(
+      window.location.search
+    );
 
-    const githubConnected = params.get("github_connected");
-    const githubError = params.get("github_error");
+    const githubConnected =
+      params.get("github_connected");
+
+    const githubError =
+      params.get("github_error");
 
     if (githubError) {
       setError(githubError);
@@ -131,24 +165,21 @@ function GitHubConnect() {
         throw new Error("Please log in first.");
       }
 
-      const response = await fetch("/api/github/connect", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          returnTo: window.location.pathname,
-        }),
-      });
+      const response = await fetch(
+        "/api/github/connect",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            returnTo: window.location.pathname,
+          }),
+        }
+      );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Unable to connect GitHub."
-        );
-      }
+      const data = await readApiResponse(response);
 
       if (!data.authorizationUrl) {
         throw new Error(
@@ -156,15 +187,31 @@ function GitHubConnect() {
         );
       }
 
-      window.location.href = data.authorizationUrl;
+      window.location.href =
+        data.authorizationUrl;
     } catch (error) {
-      console.error("GitHub connect error:", error);
+      console.error(
+        "GitHub connect error:",
+        error
+      );
 
       setError(
-        error?.message || "GitHub connection failed."
+        error?.message ||
+          "GitHub connection failed."
       );
 
       setLoading(false);
+    }
+  }
+
+  // Clicking "GitHub Connected" now opens
+  // the GitHub repository panel instead of disconnecting.
+  async function handleOpenGitHubPanel() {
+    setShowGitHubPanel(true);
+    setError("");
+
+    if (repositories.length === 0) {
+      await loadRepositories();
     }
   }
 
@@ -174,7 +221,9 @@ function GitHubConnect() {
     const name = repoName.trim();
 
     if (!name) {
-      setError("Repository name is required.");
+      setError(
+        "Repository name is required."
+      );
       return;
     }
 
@@ -198,27 +247,36 @@ function GitHubConnect() {
           },
           body: JSON.stringify({
             name,
-            description: repoDescription.trim(),
+            description:
+              repoDescription.trim(),
             private: repoPrivate,
           }),
         }
       );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Unable to create repository."
-        );
-      }
+      const data =
+        await readApiResponse(response);
 
       setRepoName("");
       setRepoDescription("");
       setRepoPrivate(false);
 
       await loadRepositories();
+
+      // If API returns created repository,
+      // open it automatically.
+      if (data.repository?.html_url) {
+        window.open(
+          data.repository.html_url,
+          "_blank",
+          "noopener,noreferrer"
+        );
+      }
     } catch (error) {
-      console.error("Create repository error:", error);
+      console.error(
+        "Create repository error:",
+        error
+      );
 
       setError(
         error?.message ||
@@ -250,174 +308,222 @@ function GitHubConnect() {
         }
       );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Disconnect failed."
-        );
-      }
+      const data =
+        await readApiResponse(response);
 
       setConnected(false);
       setConnection(null);
       setRepositories([]);
+      setShowGitHubPanel(false);
       setError("");
     } catch (error) {
-      console.error("GitHub disconnect error:", error);
+      console.error(
+        "GitHub disconnect error:",
+        error
+      );
 
       setError(
-        error?.message || "Disconnect failed."
+        error?.message ||
+          "Disconnect failed."
       );
     } finally {
       setLoading(false);
     }
   }
 
+  /*
+   * CONNECTED STATE
+   */
   if (connected) {
     return (
       <div className="github-connect">
-        <button
-          type="button"
-          className="github-connected"
-          onClick={handleDisconnect}
-          disabled={loading}
-        >
-          <span>✓ GitHub Connected</span>
 
-          {connection?.login && (
-            <span className="github-login">
-              — {connection.login}
+        {/* Connected button */}
+        <div className="github-connected-row">
+          <button
+            type="button"
+            className="github-connected"
+            onClick={handleOpenGitHubPanel}
+            disabled={loading}
+          >
+            <span>
+              ✓ GitHub Connected
             </span>
-          )}
-        </button>
 
-        <form
-          onSubmit={handleCreateRepository}
-          className="github-card"
-        >
-          <div className="github-card-title">
-            Create New Repository
-          </div>
-
-          <input
-            type="text"
-            className="github-input"
-            placeholder="Repository name"
-            value={repoName}
-            onChange={(event) =>
-              setRepoName(event.target.value)
-            }
-            disabled={creatingRepo}
-          />
-
-          <textarea
-            className="github-textarea"
-            placeholder="Description (optional)"
-            value={repoDescription}
-            onChange={(event) =>
-              setRepoDescription(event.target.value)
-            }
-            disabled={creatingRepo}
-            rows={3}
-          />
-
-          <label className="github-checkbox">
-            <input
-              type="checkbox"
-              checked={repoPrivate}
-              onChange={(event) =>
-                setRepoPrivate(event.target.checked)
-              }
-              disabled={creatingRepo}
-            />
-
-            <span>Private repository</span>
-          </label>
+            {connection?.login && (
+              <span className="github-login">
+                — {connection.login}
+              </span>
+            )}
+          </button>
 
           <button
-            type="submit"
-            className="github-create-button"
-            disabled={
-              creatingRepo || !repoName.trim()
-            }
+            type="button"
+            className="github-disconnect-button"
+            onClick={handleDisconnect}
+            disabled={loading}
           >
-            {creatingRepo
-              ? "Creating..."
-              : "Create Repository"}
+            Disconnect
           </button>
-        </form>
-
-        <div className="github-card">
-          <div className="github-repo-header">
-            <div className="github-card-title">
-              GitHub Repositories
-            </div>
-
-            <button
-              type="button"
-              className="github-refresh-button"
-              onClick={loadRepositories}
-              disabled={reposLoading}
-            >
-              {reposLoading ? "Loading..." : "Refresh"}
-            </button>
-          </div>
-
-          {reposLoading &&
-            repositories.length === 0 && (
-              <p className="github-muted">
-                Loading repositories...
-              </p>
-            )}
-
-          {!reposLoading &&
-            repositories.length === 0 &&
-            !error && (
-              <p className="github-muted">
-                No repositories found.
-              </p>
-            )}
-
-          {repositories.length > 0 && (
-            <div className="github-repo-list">
-              {repositories.map((repo) => (
-                <div
-                  key={repo.id}
-                  className="github-repo"
-                >
-                  <div className="github-repo-info">
-                    <strong>{repo.name}</strong>
-
-                    <div className="github-repo-meta">
-                      {repo.private
-                        ? "Private"
-                        : "Public"}
-
-                      {" · "}
-
-                      {repo.default_branch || "main"}
-                    </div>
-
-                    {repo.description && (
-                      <div className="github-repo-description">
-                        {repo.description}
-                      </div>
-                    )}
-                  </div>
-
-                  <a
-                    href={repo.html_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="github-view-link"
-                  >
-                    View
-                  </a>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
+
+        {/* Repository panel only appears after
+            clicking GitHub Connected */}
+        {showGitHubPanel && (
+          <>
+            <form
+              onSubmit={
+                handleCreateRepository
+              }
+              className="github-card"
+            >
+              <div className="github-card-title">
+                Create New Repository
+              </div>
+
+              <input
+                type="text"
+                className="github-input"
+                placeholder="Repository name"
+                value={repoName}
+                onChange={(event) =>
+                  setRepoName(
+                    event.target.value
+                  )
+                }
+                disabled={creatingRepo}
+              />
+
+              <textarea
+                className="github-textarea"
+                placeholder="Description (optional)"
+                value={repoDescription}
+                onChange={(event) =>
+                  setRepoDescription(
+                    event.target.value
+                  )
+                }
+                disabled={creatingRepo}
+                rows={3}
+              />
+
+              <label className="github-checkbox">
+                <input
+                  type="checkbox"
+                  checked={repoPrivate}
+                  onChange={(event) =>
+                    setRepoPrivate(
+                      event.target.checked
+                    )
+                  }
+                  disabled={creatingRepo}
+                />
+
+                <span>
+                  Private repository
+                </span>
+              </label>
+
+              <button
+                type="submit"
+                className="github-create-button"
+                disabled={
+                  creatingRepo ||
+                  !repoName.trim()
+                }
+              >
+                {creatingRepo
+                  ? "Creating..."
+                  : "Create Repository"}
+              </button>
+            </form>
+
+            <div className="github-card">
+              <div className="github-repo-header">
+                <div className="github-card-title">
+                  GitHub Repositories
+                </div>
+
+                <button
+                  type="button"
+                  className="github-refresh-button"
+                  onClick={
+                    loadRepositories
+                  }
+                  disabled={reposLoading}
+                >
+                  {reposLoading
+                    ? "Loading..."
+                    : "Refresh"}
+                </button>
+              </div>
+
+              {reposLoading &&
+                repositories.length === 0 && (
+                  <p className="github-muted">
+                    Loading repositories...
+                  </p>
+                )}
+
+              {!reposLoading &&
+                repositories.length === 0 &&
+                !error && (
+                  <p className="github-muted">
+                    No repositories found.
+                  </p>
+                )}
+
+              {repositories.length > 0 && (
+                <div className="github-repo-list">
+                  {repositories.map(
+                    (repo) => (
+                      <div
+                        key={repo.id}
+                        className="github-repo"
+                      >
+                        <div className="github-repo-info">
+                          <strong>
+                            {repo.name}
+                          </strong>
+
+                          <div className="github-repo-meta">
+                            {repo.private
+                              ? "Private"
+                              : "Public"}
+
+                            {" · "}
+
+                            {repo.default_branch ||
+                              "main"}
+                          </div>
+
+                          {repo.description && (
+                            <div className="github-repo-description">
+                              {
+                                repo.description
+                              }
+                            </div>
+                          )}
+                        </div>
+
+                        <a
+                          href={
+                            repo.html_url
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                          className="github-view-link"
+                        >
+                          View
+                        </a>
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {error && (
           <div className="github-error">
@@ -428,6 +534,9 @@ function GitHubConnect() {
     );
   }
 
+  /*
+   * NOT CONNECTED STATE
+   */
   return (
     <div className="github-connect github-connect-only">
       <button
@@ -436,7 +545,9 @@ function GitHubConnect() {
         onClick={handleConnect}
         disabled={loading}
       >
-        <span className="github-symbol">◇</span>
+        <span className="github-symbol">
+          ◇
+        </span>
 
         {loading
           ? "Connecting..."

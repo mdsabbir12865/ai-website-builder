@@ -22,13 +22,23 @@ export default async function handler(req, res) {
       });
     }
 
-    const { name, description, private: isPrivate } =
-      req.body || {};
+    const {
+      name,
+      description,
+      private: isPrivate,
+    } = req.body || {};
 
-    if (!name || typeof name !== "string") {
+    /*
+     * Validate repository name
+     */
+    if (
+      !name ||
+      typeof name !== "string"
+    ) {
       return res.status(400).json({
         success: false,
-        error: "Repository name is required.",
+        error:
+          "Repository name is required.",
       });
     }
 
@@ -37,11 +47,14 @@ export default async function handler(req, res) {
     if (!repoName) {
       return res.status(400).json({
         success: false,
-        error: "Repository name cannot be empty.",
+        error:
+          "Repository name cannot be empty.",
       });
     }
 
-    if (!/^[A-Za-z0-9._-]+$/.test(repoName)) {
+    if (
+      !/^[A-Za-z0-9._-]+$/.test(repoName)
+    ) {
       return res.status(400).json({
         success: false,
         error:
@@ -49,14 +62,20 @@ export default async function handler(req, res) {
       });
     }
 
-    const supabase = getAdminSupabase();
+    /*
+     * Get GitHub connection
+     */
+    const supabase =
+      getAdminSupabase();
 
-    const { data: connection, error: dbError } =
-      await supabase
-        .from("github_connections")
-        .select("access_token")
-        .eq("user_id", user.id)
-        .maybeSingle();
+    const {
+      data: connection,
+      error: dbError,
+    } = await supabase
+      .from("github_connections")
+      .select("access_token")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
     if (dbError) {
       throw dbError;
@@ -65,42 +84,86 @@ export default async function handler(req, res) {
     if (!connection?.access_token) {
       return res.status(400).json({
         success: false,
-        error: "GitHub is not connected.",
+        error:
+          "GitHub is not connected.",
       });
     }
 
-    const accessToken = decryptToken(
-      connection.access_token
-    );
+    /*
+     * Decrypt GitHub access token
+     */
+    const accessToken =
+      decryptToken(
+        connection.access_token
+      );
 
-    const githubResponse = await fetch(
-      "https://api.github.com/user/repos",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept:
-            "application/vnd.github+json",
-          "Content-Type": "application/json",
-          "X-GitHub-Api-Version":
-            "2022-11-28",
-        },
-        body: JSON.stringify({
-          name: repoName,
-          description:
-            typeof description === "string"
-              ? description.trim()
-              : "",
-          private:
-            Boolean(isPrivate),
-          auto_init: true,
-        }),
-      }
-    );
+    /*
+     * Create repository on GitHub
+     */
+    const githubResponse =
+      await fetch(
+        "https://api.github.com/user/repos",
+        {
+          method: "POST",
 
-    const githubData =
-      await githubResponse.json();
+          headers: {
+            Authorization:
+              `Bearer ${accessToken}`,
 
+            Accept:
+              "application/vnd.github+json",
+
+            "Content-Type":
+              "application/json",
+
+            "X-GitHub-Api-Version":
+              "2022-11-28",
+          },
+
+          body: JSON.stringify({
+            name: repoName,
+
+            description:
+              typeof description ===
+              "string"
+                ? description.trim()
+                : "",
+
+            private:
+              Boolean(isPrivate),
+
+            /*
+             * Create initial commit
+             * so the repository is ready.
+             */
+            auto_init: true,
+          }),
+        }
+      );
+
+    /*
+     * Safely read GitHub response.
+     */
+    const responseText =
+      await githubResponse.text();
+
+    let githubData = {};
+
+    try {
+      githubData = responseText
+        ? JSON.parse(responseText)
+        : {};
+    } catch {
+      githubData = {
+        message:
+          responseText ||
+          "GitHub returned an invalid response.",
+      };
+    }
+
+    /*
+     * GitHub API error
+     */
     if (!githubResponse.ok) {
       console.error(
         "GitHub create repository failed:",
@@ -117,21 +180,34 @@ export default async function handler(req, res) {
       });
     }
 
+    /*
+     * Success
+     */
     return res.status(201).json({
       success: true,
+
       repository: {
         id: githubData.id,
-        name: githubData.name,
+
+        name:
+          githubData.name,
+
         full_name:
           githubData.full_name,
+
         private:
           githubData.private,
+
         default_branch:
-          githubData.default_branch,
+          githubData.default_branch ||
+          "main",
+
         html_url:
           githubData.html_url,
+
         description:
-          githubData.description || "",
+          githubData.description ||
+          "",
       },
     });
   } catch (error) {
