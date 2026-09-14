@@ -282,11 +282,11 @@ function GitHubConnect() {
           onClick={handleDisconnect}
           disabled={loading}
         >
-          <span>âœ“ GitHub Connected</span>
+          <span>✓ GitHub Connected</span>
 
           {connection?.login && (
             <span className="github-login">
-              â€” {connection.login}
+              — {connection.login}
             </span>
           )}
         </button>
@@ -393,7 +393,7 @@ function GitHubConnect() {
                         ? "Private"
                         : "Public"}
 
-                      {" Â· "}
+                      {" · "}
 
                       {repo.default_branch || "main"}
                     </div>
@@ -436,7 +436,7 @@ function GitHubConnect() {
         onClick={handleConnect}
         disabled={loading}
       >
-        <span className="github-symbol">â—‡</span>
+        <span className="github-symbol">◇</span>
 
         {loading
           ? "Connecting..."
