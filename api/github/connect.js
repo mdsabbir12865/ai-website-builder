@@ -31,15 +31,11 @@ export default async function handler(req, res) {
       });
     }
 
-    /*
-     * IMPORTANT
-     *
-     * OAuth শেষ হওয়ার পরে Builder.jsx-এ ফেরত না গিয়ে
-     * dedicated GitHub page-এ যাবে।
-     *
-     * পরে callback.js এই returnTo ব্যবহার করবে।
-     */
-    const returnTo = "/github";
+    const returnTo =
+      typeof req.body?.returnTo === "string" &&
+      req.body.returnTo.startsWith("/builder/")
+        ? req.body.returnTo
+        : "/dashboard";
 
     const state = createOAuthState(
       user.id,

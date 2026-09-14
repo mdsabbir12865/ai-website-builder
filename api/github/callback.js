@@ -20,12 +20,9 @@ export default async function handler(req, res) {
     error_description,
   } = req.query;
 
-  /*
-   * GitHub authorization cancelled/failed
-   */
   if (error) {
     return res.redirect(
-      `/github?github_error=${encodeURIComponent(
+      `/dashboard?github_error=${encodeURIComponent(
         error_description || error
       )}`
     );
@@ -38,9 +35,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    /*
-     * Verify OAuth state
-     */
     const payload = verifyOAuthState(state);
 
     if (!payload?.userId) {
@@ -49,10 +43,6 @@ export default async function handler(req, res) {
       );
     }
 
-    /*
-     * Exchange GitHub authorization code
-     * for access token
-     */
     const tokenResponse = await fetch(
       "https://github.com/login/oauth/access_token",
       {
@@ -70,8 +60,7 @@ export default async function handler(req, res) {
       }
     );
 
-    const tokenData =
-      await tokenResponse.json();
+    const tokenData = await tokenResponse.json();
 
     if (
       !tokenResponse.ok ||
@@ -83,24 +72,19 @@ export default async function handler(req, res) {
       );
 
       return res.redirect(
-        `/github?github_error=${encodeURIComponent(
+        `/dashboard?github_error=${encodeURIComponent(
           "GitHub authorization failed."
         )}`
       );
     }
 
-    const accessToken =
-      tokenData.access_token;
+    const accessToken = tokenData.access_token;
 
-    /*
-     * Get GitHub user information
-     */
     const githubResponse = await fetch(
       "https://api.github.com/user",
       {
         headers: {
-          Authorization:
-            `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           Accept:
             "application/vnd.github+json",
           "X-GitHub-Api-Version":
@@ -118,12 +102,7 @@ export default async function handler(req, res) {
     const githubUser =
       await githubResponse.json();
 
-    /*
-     * Save encrypted GitHub token
-     * in Supabase
-     */
-    const supabase =
-      getAdminSupabase();
+    const supabase = getAdminSupabase();
 
     const encryptedToken =
       encryptToken(accessToken);
@@ -135,15 +114,11 @@ export default async function handler(req, res) {
           {
             user_id: payload.userId,
             github_id: githubUser.id,
-            github_login:
-              githubUser.login,
+            github_login: githubUser.login,
             github_avatar_url:
-              githubUser.avatar_url ||
-              null,
-            access_token:
-              encryptedToken,
-            scope:
-              tokenData.scope || "",
+              githubUser.avatar_url || null,
+            access_token: encryptedToken,
+            scope: tokenData.scope || "",
             updated_at:
               new Date().toISOString(),
           },
@@ -156,25 +131,26 @@ export default async function handler(req, res) {
       throw dbError;
     }
 
-    /*
-     * OAuth state cookie is no longer needed
-     */
     clearCookie(
       res,
       "github_oauth_state"
     );
 
-    /*
-     * IMPORTANT
-     *
-     * NEVER return to Builder.jsx.
-     *
-     * GitHub OAuth always finishes at:
-     *
-     * /github?github_connected=1
-     */
+    const returnTo =
+      payload.returnTo &&
+      payload.returnTo.startsWith(
+        "/builder/"
+      )
+        ? payload.returnTo
+        : "/dashboard";
+
+    const separator =
+      returnTo.includes("?")
+        ? "&"
+        : "?";
+
     return res.redirect(
-      "/github?github_connected=1"
+      `${returnTo}${separator}github_connected=1`
     );
   } catch (error) {
     console.error(
@@ -183,9 +159,8 @@ export default async function handler(req, res) {
     );
 
     return res.redirect(
-      `/github?github_error=${encodeURIComponent(
-        error?.message ||
-          "GitHub connection failed."
+      `/dashboard?github_error=${encodeURIComponent(
+        "GitHub connection failed."
       )}`
     );
   }
