@@ -1,385 +1,455 @@
-.github-connect {
-  width: 100%;
-  max-width: 600px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  color: #111827;
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-
-.github-connect * {
-  box-sizing: border-box;
-}
-
-/* CONNECT BUTTON */
-
-.github-connect-button {
-  width: 100%;
-  min-height: 46px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-
-  background: #111827;
-  color: #ffffff;
-
-  border: 1px solid #111827;
-  border-radius: 10px;
-
-  padding: 11px 16px;
-
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-
-  cursor: pointer;
-  transition: background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.github-connect-button:hover {
-  background: #1f2937;
-  border-color: #1f2937;
-}
-
-.github-connect-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.github-symbol {
-  font-size: 18px;
-  line-height: 1;
-}
-
-/* CONNECTED BUTTON */
-
-.github-connected {
-  width: 100%;
-  min-height: 46px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-
-  background: #f0fdf4;
-  color: #166534;
-
-  border: 1px solid #bbf7d0;
-  border-radius: 10px;
-
-  padding: 11px 14px;
-
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-
-  cursor: pointer;
-}
-
-.github-connected:hover {
-  background: #dcfce7;
-}
-
-.github-connected:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.github-login {
-  font-weight: 500;
-}
-
-/* CARD */
-
-.github-card {
-  width: 100%;
-
-  background: #ffffff;
-  color: #111827;
-
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-
-  padding: 16px;
-}
-
-.github-card-title {
-  color: #111827;
-  font-size: 16px;
-  font-weight: 700;
-  line-height: 1.4;
-  margin-bottom: 12px;
-}
-
-/* INPUTS */
-
-.github-input,
-.github-textarea {
-  width: 100%;
-
-  color: #111827 !important;
-  background: #ffffff !important;
-
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-
-  padding: 11px 12px;
-
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1.5;
-
-  outline: none;
-
-  margin-bottom: 8px;
-}
-
-.github-input::placeholder,
-.github-textarea::placeholder {
-  color: #9ca3af !important;
-  opacity: 1;
-}
-
-.github-input:focus,
-.github-textarea:focus {
-  border-color: #6b7280;
-  box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.1);
-}
-
-.github-input:disabled,
-.github-textarea:disabled {
-  background: #f9fafb !important;
-  cursor: not-allowed;
-}
-
-.github-textarea {
-  min-height: 90px;
-  resize: vertical;
-}
-
-/* CHECKBOX */
-
-.github-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  color: #374151;
-
-  margin: 4px 0 12px;
-
-  font-size: 14px;
-  line-height: 1.4;
-
-  cursor: pointer;
-}
-
-.github-checkbox input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-}
-
-/* CREATE BUTTON */
-
-.github-create-button {
-  width: 100%;
-
-  background: #111827;
-  color: #ffffff;
-
-  border: 1px solid #111827;
-  border-radius: 8px;
-
-  padding: 10px 16px;
-
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-
-  cursor: pointer;
-}
-
-.github-create-button:hover {
-  background: #1f2937;
-}
-
-.github-create-button:disabled {
-  background: #9ca3af;
-  border-color: #9ca3af;
-  cursor: not-allowed;
-}
-
-/* REPOSITORY HEADER */
-
-.github-repo-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-
-  margin-bottom: 12px;
-}
-
-.github-repo-header .github-card-title {
-  margin-bottom: 0;
-}
-
-/* REFRESH */
-
-.github-refresh-button {
-  flex-shrink: 0;
-
-  background: #ffffff;
-  color: #374151;
-
-  border: 1px solid #d1d5db;
-  border-radius: 7px;
-
-  padding: 7px 11px;
-
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-
-  cursor: pointer;
-}
-
-.github-refresh-button:hover {
-  background: #f3f4f6;
-}
-
-.github-refresh-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* REPOSITORY LIST */
-
-.github-repo-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-
-  max-height: 320px;
-  overflow-y: auto;
-}
-
-.github-repo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-
-  background: #ffffff;
-  color: #111827;
-
-  border: 1px solid #e5e7eb;
-  border-radius: 9px;
-
-  padding: 12px;
-}
-
-.github-repo-info {
-  min-width: 0;
-}
-
-.github-repo strong {
-  color: #111827;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.4;
-
-  word-break: break-word;
-}
-
-.github-repo-meta {
-  color: #6b7280;
-
-  font-size: 12px;
-  line-height: 1.4;
-
-  margin-top: 4px;
-}
-
-.github-repo-description {
-  color: #6b7280;
-
-  font-size: 13px;
-  line-height: 1.45;
-
-  margin-top: 4px;
-
-  word-break: break-word;
-}
-
-.github-view-link {
-  flex-shrink: 0;
-
-  color: #2563eb;
-
-  font-size: 13px;
-  font-weight: 600;
-
-  text-decoration: none;
-}
-
-.github-view-link:hover {
-  text-decoration: underline;
-}
-
-/* MUTED TEXT */
-
-.github-muted {
-  color: #6b7280;
-
-  font-size: 13px;
-  line-height: 1.5;
-
-  margin: 0;
-}
-
-/* ERROR */
-
-.github-error {
-  color: #dc2626;
-
-  background: #fef2f2;
-
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-
-  padding: 9px 11px;
-
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-/* MOBILE */
-
-@media (max-width: 480px) {
-  .github-connect {
-    max-width: 100%;
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+import "./GitHubConnect.css";
+
+function GitHubConnect() {
+  const [loading, setLoading] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [connection, setConnection] = useState(null);
+  const [repositories, setRepositories] = useState([]);
+  const [reposLoading, setReposLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const [repoName, setRepoName] = useState("");
+  const [repoDescription, setRepoDescription] = useState("");
+  const [repoPrivate, setRepoPrivate] = useState(false);
+  const [creatingRepo, setCreatingRepo] = useState(false);
+
+  async function getAccessToken() {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error) {
+      throw error;
+    }
+
+    return data?.session?.access_token || null;
   }
 
-  .github-card {
-    padding: 14px;
+  async function loadRepositories() {
+    setReposLoading(true);
+    setError("");
+
+    try {
+      const token = await getAccessToken();
+
+      if (!token) {
+        throw new Error("Please log in first.");
+      }
+
+      const response = await fetch("/api/github/repos", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Unable to load repositories."
+        );
+      }
+
+      setRepositories(data.repositories || []);
+    } catch (error) {
+      console.error("GitHub repositories error:", error);
+
+      setError(
+        error?.message || "Unable to load repositories."
+      );
+    } finally {
+      setReposLoading(false);
+    }
   }
 
-  .github-repo {
-    align-items: flex-start;
+  async function loadStatus() {
+    try {
+      const token = await getAccessToken();
+
+      if (!token) {
+        return;
+      }
+
+      const response = await fetch("/api/github/status", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Unable to check GitHub."
+        );
+      }
+
+      const isConnected = Boolean(data.connected);
+
+      setConnected(isConnected);
+      setConnection(data.connection || null);
+
+      if (isConnected) {
+        await loadRepositories();
+      }
+    } catch (error) {
+      console.error("GitHub status error:", error);
+    }
   }
 
-  .github-repo-header {
-    align-items: flex-start;
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    const githubConnected = params.get("github_connected");
+    const githubError = params.get("github_error");
+
+    if (githubError) {
+      setError(githubError);
+    }
+
+    if (githubConnected === "1") {
+      window.history.replaceState(
+        {},
+        "",
+        window.location.pathname
+      );
+    }
+
+    loadStatus();
+  }, []);
+
+  async function handleConnect() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const token = await getAccessToken();
+
+      if (!token) {
+        throw new Error("Please log in first.");
+      }
+
+      const response = await fetch("/api/github/connect", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          returnTo: window.location.pathname,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Unable to connect GitHub."
+        );
+      }
+
+      if (!data.authorizationUrl) {
+        throw new Error(
+          "GitHub authorization URL is missing."
+        );
+      }
+
+      window.location.href = data.authorizationUrl;
+    } catch (error) {
+      console.error("GitHub connect error:", error);
+
+      setError(
+        error?.message || "GitHub connection failed."
+      );
+
+      setLoading(false);
+    }
   }
+
+  async function handleCreateRepository(event) {
+    event.preventDefault();
+
+    const name = repoName.trim();
+
+    if (!name) {
+      setError("Repository name is required.");
+      return;
+    }
+
+    setCreatingRepo(true);
+    setError("");
+
+    try {
+      const token = await getAccessToken();
+
+      if (!token) {
+        throw new Error("Please log in first.");
+      }
+
+      const response = await fetch(
+        "/api/github/create-repo",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            description: repoDescription.trim(),
+            private: repoPrivate,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Unable to create repository."
+        );
+      }
+
+      setRepoName("");
+      setRepoDescription("");
+      setRepoPrivate(false);
+
+      await loadRepositories();
+    } catch (error) {
+      console.error("Create repository error:", error);
+
+      setError(
+        error?.message ||
+          "Unable to create repository."
+      );
+    } finally {
+      setCreatingRepo(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const token = await getAccessToken();
+
+      if (!token) {
+        throw new Error("Please log in first.");
+      }
+
+      const response = await fetch(
+        "/api/github/disconnect",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Disconnect failed."
+        );
+      }
+
+      setConnected(false);
+      setConnection(null);
+      setRepositories([]);
+      setError("");
+    } catch (error) {
+      console.error("GitHub disconnect error:", error);
+
+      setError(
+        error?.message || "Disconnect failed."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (connected) {
+    return (
+      <div className="github-connect">
+        <button
+          type="button"
+          className="github-connected"
+          onClick={handleDisconnect}
+          disabled={loading}
+        >
+          <span>âœ“ GitHub Connected</span>
+
+          {connection?.login && (
+            <span className="github-login">
+              â€” {connection.login}
+            </span>
+          )}
+        </button>
+
+        <form
+          onSubmit={handleCreateRepository}
+          className="github-card"
+        >
+          <div className="github-card-title">
+            Create New Repository
+          </div>
+
+          <input
+            type="text"
+            className="github-input"
+            placeholder="Repository name"
+            value={repoName}
+            onChange={(event) =>
+              setRepoName(event.target.value)
+            }
+            disabled={creatingRepo}
+          />
+
+          <textarea
+            className="github-textarea"
+            placeholder="Description (optional)"
+            value={repoDescription}
+            onChange={(event) =>
+              setRepoDescription(event.target.value)
+            }
+            disabled={creatingRepo}
+            rows={3}
+          />
+
+          <label className="github-checkbox">
+            <input
+              type="checkbox"
+              checked={repoPrivate}
+              onChange={(event) =>
+                setRepoPrivate(event.target.checked)
+              }
+              disabled={creatingRepo}
+            />
+
+            <span>Private repository</span>
+          </label>
+
+          <button
+            type="submit"
+            className="github-create-button"
+            disabled={
+              creatingRepo || !repoName.trim()
+            }
+          >
+            {creatingRepo
+              ? "Creating..."
+              : "Create Repository"}
+          </button>
+        </form>
+
+        <div className="github-card">
+          <div className="github-repo-header">
+            <div className="github-card-title">
+              GitHub Repositories
+            </div>
+
+            <button
+              type="button"
+              className="github-refresh-button"
+              onClick={loadRepositories}
+              disabled={reposLoading}
+            >
+              {reposLoading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
+
+          {reposLoading &&
+            repositories.length === 0 && (
+              <p className="github-muted">
+                Loading repositories...
+              </p>
+            )}
+
+          {!reposLoading &&
+            repositories.length === 0 &&
+            !error && (
+              <p className="github-muted">
+                No repositories found.
+              </p>
+            )}
+
+          {repositories.length > 0 && (
+            <div className="github-repo-list">
+              {repositories.map((repo) => (
+                <div
+                  key={repo.id}
+                  className="github-repo"
+                >
+                  <div className="github-repo-info">
+                    <strong>{repo.name}</strong>
+
+                    <div className="github-repo-meta">
+                      {repo.private
+                        ? "Private"
+                        : "Public"}
+
+                      {" Â· "}
+
+                      {repo.default_branch || "main"}
+                    </div>
+
+                    {repo.description && (
+                      <div className="github-repo-description">
+                        {repo.description}
+                      </div>
+                    )}
+                  </div>
+
+                  <a
+                    href={repo.html_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="github-view-link"
+                  >
+                    View
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <div className="github-error">
+            {error}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="github-connect github-connect-only">
+      <button
+        type="button"
+        className="github-connect-button"
+        onClick={handleConnect}
+        disabled={loading}
+      >
+        <span className="github-symbol">â—‡</span>
+
+        {loading
+          ? "Connecting..."
+          : "Connect GitHub"}
+      </button>
+
+      {error && (
+        <div className="github-error">
+          {error}
+        </div>
+      )}
+    </div>
+  );
 }
+
+export default GitHubConnect;
