@@ -387,25 +387,3 @@
   justify-content: space-between;
   gap: 10px;
 }
-
-.github-disconnect-button {
-  flex-shrink: 0;
-  background: transparent;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-  border-radius: 7px;
-  padding: 6px 9px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.github-disconnect-button:hover {
-  background: #fef2f2;
-}
-
-.github-disconnect-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
