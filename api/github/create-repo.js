@@ -72,7 +72,36 @@ export default async function handler(req, res) {
     const accessToken = decryptToken(
       connection.access_token
     );
+// Check actual GitHub token permissions
+const scopeCheckResponse = await fetch(
+  "https://api.github.com/user",
+  {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  }
+);
 
+const grantedScopes =
+  scopeCheckResponse.headers.get("x-oauth-scopes") || "";
+
+console.log("GitHub granted scopes:", grantedScopes);
+
+if (
+  !grantedScopes
+    .split(",")
+    .map((scope) => scope.trim())
+    .includes("repo")
+) {
+  return res.status(403).json({
+    success: false,
+    error:
+      "GitHub permission missing: repo scope. Please reconnect GitHub and grant repository access.",
+    grantedScopes,
+  });
+}
     const githubResponse = await fetch(
       "https://api.github.com/user/repos",
       {
