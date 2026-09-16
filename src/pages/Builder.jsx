@@ -2135,7 +2135,12 @@ ${jsCode}
             &lt;/&gt; Export Code
           </button>
 
-<GitHubConnect />
+<GitHubConnect
+  projectName={project?.name}
+  htmlCode={htmlCode}
+  cssCode={cssCode}
+  jsCode={jsCode}
+/>
           <button>
             ▲ Vercel
 

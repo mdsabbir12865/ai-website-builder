@@ -2,6 +2,8 @@ import {
   getSupabaseUser,
   getAdminSupabase,
   decryptToken,
+  githubHeaders,
+  readJson,
 } from "./_utils.js";
 
 export default async function handler(req, res) {
@@ -49,18 +51,11 @@ export default async function handler(req, res) {
     const githubResponse = await fetch(
       "https://api.github.com/user/repos?per_page=100&sort=updated",
       {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept:
-            "application/vnd.github+json",
-          "X-GitHub-Api-Version":
-            "2022-11-28",
-        },
+        headers: githubHeaders(accessToken),
       }
     );
 
-    const githubData =
-      await githubResponse.json();
+    const githubData = await readJson(githubResponse);
 
     if (!githubResponse.ok) {
       console.error(

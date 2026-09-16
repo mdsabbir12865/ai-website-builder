@@ -8,6 +8,7 @@ export const GITHUB_CLIENT_SECRET =
   process.env.GITHUB_CLIENT_SECRET;
 
 export const GITHUB_REDIRECT_URI =
+  process.env.GITHUB_REDIRECT_URI ||
   "https://ms-do.vercel.app/api/github/callback";
 
 const SUPABASE_URL =
@@ -83,6 +84,47 @@ export async function getSupabaseUser(req) {
   return user;
 }
 
+export function getCookie(req, name) {
+  const cookies = req.headers.cookie || "";
+  const prefix = `${name}=`;
+  const match = cookies.split(";").map((item) => item.trim())
+    .find((item) => item.startsWith(prefix));
+  return match ? decodeURIComponent(match.slice(prefix.length)) : null;
+}
+
+export async function readJson(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text.slice(0, 500) };
+  }
+}
+
+export function githubHeaders(accessToken, extra = {}) {
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    ...extra,
+  };
+}
+
+export function scopesFromResponse(response) {
+  return (response.headers.get("x-oauth-scopes") || "")
+    .split(",").map((scope) => scope.trim()).filter(Boolean);
+}
+
+export async function getGithubConnection(userId) {
+  const supabase = getAdminSupabase();
+  const { data, error } = await supabase.from("github_connections")
+    .select("access_token, github_login, scope").eq("user_id", userId).maybeSingle();
+  if (error) throw error;
+  if (!data?.access_token) return null;
+  return { ...data, accessToken: decryptToken(data.access_token) };
+}
+
 function base64url(value) {
   return Buffer.from(value)
     .toString("base64")
@@ -156,24 +198,17 @@ export function verifyOAuthState(state) {
       .update(encoded)
       .digest("hex");
 
-  if (
-    !crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expected)
-    )
-  ) {
+  if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
     return null;
   }
 
-  const payload =
-    JSON.parse(
-      fromBase64url(encoded)
-    );
+  let payload;
+  try { payload = JSON.parse(fromBase64url(encoded)); } catch { return null; }
 
   const age =
     Date.now() - payload.createdAt;
 
-  if (age > 10 * 60 * 1000) {
+  if (!payload.createdAt || age < 0 || age > 10 * 60 * 1000) {
     return null;
   }
 
