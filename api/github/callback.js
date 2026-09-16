@@ -6,6 +6,10 @@ import {
   verifyOAuthState,
   encryptToken,
   clearCookie,
+  getCookie,
+  githubHeaders,
+  scopesFromResponse,
+  readJson,
 } from "./_utils.js";
 
 export default async function handler(req, res) {
@@ -38,9 +42,13 @@ export default async function handler(req, res) {
     const payload = verifyOAuthState(state);
 
     if (!payload?.userId) {
-      return res.status(400).send(
-        "Invalid or expired OAuth state."
-      );
+      return res.redirect("/dashboard?github_error=Invalid%20or%20expired%20OAuth%20state.");
+    }
+
+    // The signed state identifies the account and this cookie proves that the
+    // same browser initiated the authorization (CSRF protection).
+    if (getCookie(req, "github_oauth_state") !== state) {
+      return res.redirect("/dashboard?github_error=Invalid%20OAuth%20state.");
     }
 
     const tokenResponse = await fetch(
@@ -60,15 +68,14 @@ export default async function handler(req, res) {
       }
     );
 
-    const tokenData = await tokenResponse.json();
+    const tokenData = await readJson(tokenResponse);
 
     if (
       !tokenResponse.ok ||
       !tokenData.access_token
     ) {
       console.error(
-        "GitHub token exchange failed:",
-        tokenData
+        "GitHub token exchange failed:", tokenData?.error || tokenData?.message || tokenResponse.status
       );
 
       return res.redirect(
@@ -83,13 +90,7 @@ export default async function handler(req, res) {
     const githubResponse = await fetch(
       "https://api.github.com/user",
       {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept:
-            "application/vnd.github+json",
-          "X-GitHub-Api-Version":
-            "2022-11-28",
-        },
+        headers: githubHeaders(accessToken),
       }
     );
 
@@ -99,8 +100,13 @@ export default async function handler(req, res) {
       );
     }
 
-    const githubUser =
-      await githubResponse.json();
+    const githubUser = await readJson(githubResponse);
+    const grantedScopes = scopesFromResponse(githubResponse);
+
+    if (!grantedScopes.includes("repo")) {
+      clearCookie(res, "github_oauth_state");
+      return res.redirect(`/dashboard?github_error=${encodeURIComponent("GitHub did not grant the required repo scope. Revoke this application's authorization in GitHub Settings → Applications, then reconnect. Verify that GITHUB_CLIENT_ID belongs to the OAuth App configured with the production callback URL.")}`);
+    }
 
     const supabase = getAdminSupabase();
 
@@ -118,7 +124,7 @@ export default async function handler(req, res) {
             github_avatar_url:
               githubUser.avatar_url || null,
             access_token: encryptedToken,
-            scope: tokenData.scope || "",
+            scope: grantedScopes.join(", "),
             updated_at:
               new Date().toISOString(),
           },
