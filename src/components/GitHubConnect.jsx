@@ -46,6 +46,7 @@ function GitHubConnect({ projectName, htmlCode, cssCode, jsCode }) {
       const accessToken = await getToken();
       const response = await fetch(path, {
         ...options,
+        credentials: "include",
         headers: {
           Authorization: `Bearer ${accessToken}`,
           ...(options.body ? { "Content-Type": "application/json" } : {}),
@@ -123,6 +124,8 @@ function GitHubConnect({ projectName, htmlCode, cssCode, jsCode }) {
     setSuccess("");
 
     try {
+      sessionStorage.setItem("github_export_open", "1");
+
       const data = await request("/api/github/connect", {
         method: "POST",
         body: JSON.stringify({ returnTo: window.location.pathname }),

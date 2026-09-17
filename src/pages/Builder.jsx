@@ -119,7 +119,37 @@ function Builder() {
     useState(false);
 
   const [showExport, setShowExport] =
-    useState(false);
+    useState(() => {
+      const params = new URLSearchParams(
+        window.location.search
+      );
+
+      return (
+        params.get("github_connected") === "1" ||
+        Boolean(params.get("github_error")) ||
+        sessionStorage.getItem("github_export_open") === "1"
+      );
+    });
+
+  useEffect(() => {
+    const params = new URLSearchParams(
+      window.location.search
+    );
+
+    if (
+      params.get("github_connected") === "1" ||
+      params.get("github_error")
+    ) {
+      setShowExport(true);
+    }
+
+    if (
+      sessionStorage.getItem("github_export_open") === "1"
+    ) {
+      setShowExport(true);
+      sessionStorage.removeItem("github_export_open");
+    }
+  }, []);
 
   /* ========================================================
      LOAD PROJECT

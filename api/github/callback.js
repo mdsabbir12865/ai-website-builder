@@ -7,10 +7,10 @@ import {
   getAdminSupabase,
   getGrantedScopes,
   hasRepoScope,
-  isSafeBuilderReturnTo,
   parseCookies,
   readGithubResponse,
-  verifyOAuthState,
+  resolveReturnTo,
+  validateOAuthRequest,
 } from "./_utils.js";
 
 function redirect(res, path, key, value) {
@@ -18,6 +18,11 @@ function redirect(res, path, key, value) {
   return res.redirect(
     `${path}${separator}${key}=${encodeURIComponent(value)}`
   );
+}
+
+function redirectError(res, returnTo, message) {
+  clearCookie(res, "github_oauth_state");
+  return redirect(res, resolveReturnTo(returnTo), "github_error", message);
 }
 
 export default async function handler(req, res) {
@@ -29,7 +34,12 @@ export default async function handler(req, res) {
   const fallback = "/dashboard";
 
   if (error) {
-    return redirect(res, fallback, "github_error", description || error);
+    return redirect(
+      res,
+      fallback,
+      "github_error",
+      typeof description === "string" ? description : String(error)
+    );
   }
 
   if (
@@ -38,17 +48,32 @@ export default async function handler(req, res) {
     !state ||
     typeof state !== "string"
   ) {
-    return res.status(400).send("Missing GitHub OAuth code or state.");
+    return redirectError(
+      res,
+      fallback,
+      "Missing GitHub authorization details. Please try connecting again."
+    );
   }
 
+  const validation = validateOAuthRequest(state, req);
+  if (!validation.valid || !validation.payload) {
+    const message =
+      validation.code === "OAUTH_STATE_COOKIE_MISMATCH"
+        ? "GitHub connection could not be verified in this browser. Please try Connect GitHub again."
+        : "Invalid or expired OAuth state. Please try Connect GitHub again.";
+
+    console.error("GitHub OAuth state rejected", {
+      code: validation.code,
+      cookiePresent: Boolean(parseCookies(req).github_oauth_state),
+    });
+
+    return redirectError(res, fallback, message);
+  }
+
+  const { payload } = validation;
+  const returnTo = resolveReturnTo(payload.returnTo, fallback);
+
   try {
-    const payload = verifyOAuthState(state);
-    const cookieState = parseCookies(req).github_oauth_state;
-
-    if (!payload?.userId || !cookieState || cookieState !== state) {
-      return res.status(400).send("Invalid or expired OAuth state.");
-    }
-
     if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
       throw new Error("GitHub OAuth is not configured.");
     }
@@ -73,21 +98,17 @@ export default async function handler(req, res) {
     const tokenData = await readGithubResponse(tokenResponse);
 
     if (!tokenResponse.ok || !tokenData?.access_token) {
-      clearCookie(res, "github_oauth_state");
-      return redirect(
+      return redirectError(
         res,
-        fallback,
-        "github_error",
+        returnTo,
         "GitHub authorization failed. Please try again."
       );
     }
 
     if (tokenData.error) {
-      clearCookie(res, "github_oauth_state");
-      return redirect(
+      return redirectError(
         res,
-        fallback,
-        "github_error",
+        returnTo,
         tokenData.error_description || tokenData.error
       );
     }
@@ -100,28 +121,21 @@ export default async function handler(req, res) {
       scopeList,
     } = await getGrantedScopes(accessToken, tokenData.scope || "");
 
-    const returnTo = isSafeBuilderReturnTo(payload.returnTo)
-      ? payload.returnTo
-      : fallback;
-
     clearCookie(res, "github_oauth_state");
 
     if (!githubResponse.ok || !githubUser?.id || !githubUser?.login) {
-      return redirect(
+      return redirectError(
         res,
         returnTo,
-        "github_error",
         "Unable to verify the GitHub account."
       );
     }
 
-    // Never persist a connection that lacks repository permission.
     if (!hasRepoScope(scopeList)) {
-      return redirect(
+      return redirectError(
         res,
         returnTo,
-        "github_error",
-        "GitHub did not grant repository access. Open GitHub Settings → Applications → Authorized OAuth Apps, revoke this app, then reconnect and approve repository access. If this keeps happening, confirm GITHUB_CLIENT_ID belongs to a classic OAuth App (not a GitHub App)."
+        "GitHub did not grant repository access. Open GitHub Settings → Applications → Authorized OAuth Apps, revoke this app, then reconnect and approve repository access."
       );
     }
 
@@ -145,11 +159,9 @@ export default async function handler(req, res) {
     return redirect(res, returnTo, "github_connected", "1");
   } catch (error) {
     console.error("GitHub callback failed", error?.message);
-    clearCookie(res, "github_oauth_state");
-    return redirect(
+    return redirectError(
       res,
-      fallback,
-      "github_error",
+      returnTo,
       "GitHub connection failed. Please try again."
     );
   }

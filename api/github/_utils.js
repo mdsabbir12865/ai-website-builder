@@ -86,12 +86,15 @@ export function createOAuthState(userId, returnTo = "/dashboard") {
 }
 
 export function verifyOAuthState(state) {
-  if (typeof state !== "string") return null;
+  if (typeof state !== "string" || state.length > 4096) return null;
 
-  const pieces = state.split(".");
-  if (pieces.length !== 2 || !/^[a-f0-9]{64}$/i.test(pieces[1])) return null;
+  const lastDot = state.lastIndexOf(".");
+  if (lastDot <= 0 || lastDot >= state.length - 1) return null;
 
-  const [encoded, signature] = pieces;
+  const encoded = state.slice(0, lastDot);
+  const signature = state.slice(lastDot + 1);
+  if (!/^[a-f0-9]{64}$/i.test(signature)) return null;
+
   const expected = crypto
     .createHmac("sha256", getOAuthSecret())
     .update(encoded)
@@ -115,6 +118,25 @@ export function verifyOAuthState(state) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Validate OAuth callback state.
+ * HMAC-signed state is the primary CSRF protection.
+ * Cookie double-submit is enforced only when the browser sends the cookie.
+ */
+export function validateOAuthRequest(state, req) {
+  const payload = verifyOAuthState(state);
+  if (!payload?.userId) {
+    return { valid: false, code: "OAUTH_STATE_INVALID", payload: null };
+  }
+
+  const cookieState = parseCookies(req).github_oauth_state;
+  if (cookieState && cookieState !== state) {
+    return { valid: false, code: "OAUTH_STATE_COOKIE_MISMATCH", payload: null };
+  }
+
+  return { valid: true, code: null, payload, cookiePresent: Boolean(cookieState) };
 }
 
 function encryptionKey() {
@@ -184,14 +206,22 @@ export function parseCookies(req) {
 }
 
 export function setCookie(res, name, value, options = {}) {
+  const secure =
+    options.secure !== undefined
+      ? options.secure
+      : process.env.NODE_ENV === "production" ||
+        Boolean(process.env.VERCEL);
+
   const parts = [
     `${name}=${encodeURIComponent(value)}`,
     "Path=/",
     "HttpOnly",
-    "Secure",
     `SameSite=${options.sameSite || "Lax"}`,
   ];
+
+  if (secure) parts.push("Secure");
   if (options.maxAge !== undefined) parts.push(`Max-Age=${options.maxAge}`);
+
   res.setHeader("Set-Cookie", parts.join("; "));
 }
 
@@ -409,6 +439,22 @@ export function validateBranch(value) {
 export function isSafeBuilderReturnTo(value) {
   return (
     typeof value === "string" &&
-    /^\/builder\/[A-Za-z0-9-]+(?:\?.*)?$/.test(value)
+    /^\/builder\/[A-Za-z0-9-]+(?:\?[^#]*)?(?:#.*)?$/.test(value)
   );
+}
+
+/** Allow only same-origin relative app routes (no open redirects). */
+export function isSafeReturnTo(value) {
+  if (typeof value !== "string" || !value.startsWith("/")) return false;
+  if (value.startsWith("//") || value.includes("://") || value.includes("\\")) {
+    return false;
+  }
+  return (
+    value === "/dashboard" ||
+    isSafeBuilderReturnTo(value)
+  );
+}
+
+export function resolveReturnTo(value, fallback = "/dashboard") {
+  return isSafeReturnTo(value) ? value : fallback;
 }

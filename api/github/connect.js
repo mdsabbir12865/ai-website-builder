@@ -4,7 +4,7 @@ import {
   GITHUB_REDIRECT_URI,
   createOAuthState,
   getSupabaseUser,
-  isSafeBuilderReturnTo,
+  isSafeReturnTo,
   sendError,
   setCookie,
 } from "./_utils.js";
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
       return sendError(res, 401, "UNAUTHENTICATED", "You must be logged in.");
     }
 
-    const returnTo = isSafeBuilderReturnTo(req.body?.returnTo)
+    const returnTo = isSafeReturnTo(req.body?.returnTo)
       ? req.body.returnTo
       : "/dashboard";
 
