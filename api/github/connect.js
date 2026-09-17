@@ -1,81 +1,62 @@
 import {
   GITHUB_CLIENT_ID,
+  GITHUB_OAUTH_SCOPES,
   GITHUB_REDIRECT_URI,
   createOAuthState,
   getSupabaseUser,
+  isSafeBuilderReturnTo,
+  sendError,
   setCookie,
 } from "./_utils.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      success: false,
-      error: "Method not allowed.",
-    });
+    return sendError(res, 405, "METHOD_NOT_ALLOWED", "Method not allowed.");
   }
 
   try {
     if (!GITHUB_CLIENT_ID) {
-      return res.status(500).json({
-        success: false,
-        error: "GITHUB_CLIENT_ID is not configured.",
-      });
+      return sendError(
+        res,
+        500,
+        "GITHUB_NOT_CONFIGURED",
+        "GitHub OAuth is not configured."
+      );
     }
 
     const user = await getSupabaseUser(req);
-
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: "You must be logged in.",
-      });
+      return sendError(res, 401, "UNAUTHENTICATED", "You must be logged in.");
     }
 
-    const returnTo =
-      typeof req.body?.returnTo === "string" &&
-      req.body.returnTo.startsWith("/builder/")
-        ? req.body.returnTo
-        : "/dashboard";
+    const returnTo = isSafeBuilderReturnTo(req.body?.returnTo)
+      ? req.body.returnTo
+      : "/dashboard";
 
-    const state = createOAuthState(
-      user.id,
-      returnTo
-    );
+    const state = createOAuthState(user.id, returnTo);
+    setCookie(res, "github_oauth_state", state, { maxAge: 600 });
 
-    setCookie(
-      res,
-      "github_oauth_state",
-      state,
+    // prompt=consent forces GitHub to re-show the permission screen so
+    // expanded scopes (repo) are not silently skipped on reconnect.
+    const authorizationUrl = `https://github.com/login/oauth/authorize?${new URLSearchParams(
       {
-        maxAge: 600,
+        client_id: GITHUB_CLIENT_ID,
+        redirect_uri: GITHUB_REDIRECT_URI,
+        scope: GITHUB_OAUTH_SCOPES,
+        state,
+        allow_signup: "false",
+        prompt: "consent",
       }
-    );
+    ).toString()}`;
 
-    const params = new URLSearchParams({
-      client_id: GITHUB_CLIENT_ID,
-      redirect_uri: GITHUB_REDIRECT_URI,
-      scope: "repo",
-      state,
-    });
-
-    const authorizationUrl =
-      `https://github.com/login/oauth/authorize?${params.toString()}`;
-
-    return res.status(200).json({
-      success: true,
-      authorizationUrl,
-    });
+    return res.status(200).json({ success: true, authorizationUrl });
   } catch (error) {
-    console.error(
-      "GitHub connect error:",
-      error
+    console.error("GitHub connect failed", error?.message);
+    return sendError(
+      res,
+      500,
+      "CONNECT_START_FAILED",
+      "Unable to start GitHub connection."
     );
-
-    return res.status(500).json({
-      success: false,
-      error:
-        error?.message ||
-        "Unable to start GitHub connection.",
-    });
   }
 }

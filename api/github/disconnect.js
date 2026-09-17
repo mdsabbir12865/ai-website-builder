@@ -1,61 +1,53 @@
 import {
+  decryptToken,
   getAdminSupabase,
+  getConnection,
   getSupabaseUser,
+  revokeGitHubGrant,
+  sendError,
 } from "./_utils.js";
 
-export default async function handler(
-  req,
-  res
-) {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      success: false,
-      error: "Method not allowed.",
-    });
+    return sendError(res, 405, "METHOD_NOT_ALLOWED", "Method not allowed.");
   }
 
   try {
-    const user =
-      await getSupabaseUser(req);
-
+    const user = await getSupabaseUser(req);
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: "Not authenticated.",
-      });
+      return sendError(res, 401, "UNAUTHENTICATED", "Not authenticated.");
     }
 
-    const supabase =
-      getAdminSupabase();
+    const connection = await getConnection(user.id);
 
-    const { error } =
-      await supabase
-        .from("github_connections")
-        .delete()
-        .eq(
-          "user_id",
-          user.id
-        );
-
-    if (error) {
-      throw error;
+    if (connection?.access_token) {
+      try {
+        const accessToken = decryptToken(connection.access_token);
+        // Revoke the GitHub grant so the next OAuth must re-consent with repo.
+        await revokeGitHubGrant(accessToken);
+      } catch (error) {
+        console.error("GitHub grant revoke failed", error?.message);
+      }
     }
+
+    const { error } = await getAdminSupabase()
+      .from("github_connections")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (error) throw error;
 
     return res.status(200).json({
       success: true,
-      message:
-        "GitHub disconnected.",
+      message: "GitHub disconnected.",
     });
   } catch (error) {
-    console.error(
-      "GitHub disconnect error:",
-      error
+    console.error("GitHub disconnect error:", error?.message);
+    return sendError(
+      res,
+      500,
+      "DISCONNECT_FAILED",
+      "Unable to disconnect GitHub."
     );
-
-    return res.status(500).json({
-      success: false,
-      error:
-        "Unable to disconnect GitHub.",
-    });
   }
 }

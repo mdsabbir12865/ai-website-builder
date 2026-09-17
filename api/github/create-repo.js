@@ -1,179 +1,121 @@
 import {
-  getSupabaseUser,
-  getAdminSupabase,
   decryptToken,
+  getConnection,
+  getGrantedScopes,
+  getSupabaseUser,
+  githubError,
+  githubHeaders,
+  hasRepoScope,
+  readGithubResponse,
+  repoScopeRequiredError,
+  sendError,
+  validateRepositoryName,
 } from "./_utils.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      success: false,
-      error: "Method not allowed.",
-    });
+    return sendError(res, 405, "METHOD_NOT_ALLOWED", "Method not allowed.");
   }
 
   try {
     const user = await getSupabaseUser(req);
-
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: "You must be logged in.",
-      });
+      return sendError(res, 401, "UNAUTHENTICATED", "You must be logged in.");
     }
 
-    const { name, description, private: isPrivate } =
-      req.body || {};
+    const name =
+      typeof req.body?.name === "string" ? req.body.name.trim() : "";
+    const description =
+      typeof req.body?.description === "string"
+        ? req.body.description.trim().slice(0, 350)
+        : "";
 
-    if (!name || typeof name !== "string") {
-      return res.status(400).json({
-        success: false,
-        error: "Repository name is required.",
-      });
-    }
-
-    const repoName = name.trim();
-
-    if (!repoName) {
-      return res.status(400).json({
-        success: false,
-        error: "Repository name cannot be empty.",
-      });
-    }
-
-    if (!/^[A-Za-z0-9._-]+$/.test(repoName)) {
-      return res.status(400).json({
-        success: false,
-        error:
-          "Repository name can only contain letters, numbers, dots, hyphens and underscores.",
-      });
-    }
-
-    const supabase = getAdminSupabase();
-
-    const { data: connection, error: dbError } =
-      await supabase
-        .from("github_connections")
-        .select("access_token")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-    if (dbError) {
-      throw dbError;
-    }
-
-    if (!connection?.access_token) {
-      return res.status(400).json({
-        success: false,
-        error: "GitHub is not connected.",
-      });
-    }
-
-    const accessToken = decryptToken(
-      connection.access_token
-    );
-// Check actual GitHub token permissions
-const scopeCheckResponse = await fetch(
-  "https://api.github.com/user",
-  {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-  }
-);
-
-const grantedScopes =
-  scopeCheckResponse.headers.get("x-oauth-scopes") || "";
-
-console.log("GitHub granted scopes:", grantedScopes);
-
-if (
-  !grantedScopes
-    .split(",")
-    .map((scope) => scope.trim())
-    .includes("repo")
-) {
-  return res.status(403).json({
-    success: false,
-    error:
-      "GitHub permission missing: repo scope. Please reconnect GitHub and grant repository access.",
-    grantedScopes,
-  });
-}
-    const githubResponse = await fetch(
-      "https://api.github.com/user/repos",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept:
-            "application/vnd.github+json",
-          "Content-Type": "application/json",
-          "X-GitHub-Api-Version":
-            "2022-11-28",
-        },
-        body: JSON.stringify({
-          name: repoName,
-          description:
-            typeof description === "string"
-              ? description.trim()
-              : "",
-          private:
-            Boolean(isPrivate),
-          auto_init: true,
-        }),
-      }
-    );
-
-    const githubData =
-      await githubResponse.json();
-
-    if (!githubResponse.ok) {
-      console.error(
-        "GitHub create repository failed:",
-        githubData
+    if (!validateRepositoryName(name)) {
+      return sendError(
+        res,
+        400,
+        "INVALID_REPOSITORY_NAME",
+        "Repository names must be 1–100 characters and use only letters, numbers, dots, hyphens, or underscores."
       );
+    }
 
-      return res.status(
-        githubResponse.status
-      ).json({
-        success: false,
-        error:
-          githubData?.message ||
-          "Unable to create repository.",
-      });
+    const connection = await getConnection(user.id);
+    if (!connection?.access_token) {
+      return sendError(
+        res,
+        400,
+        "GITHUB_NOT_CONNECTED",
+        "GitHub is not connected."
+      );
+    }
+
+    const accessToken = decryptToken(connection.access_token);
+    const granted = await getGrantedScopes(
+      accessToken,
+      connection.scope || ""
+    );
+
+    if (!granted.response.ok) {
+      const [status, code, message] = githubError(
+        granted.response,
+        granted.body
+      );
+      return sendError(res, status, code, message);
+    }
+
+    if (!hasRepoScope(granted.scopeList)) {
+      const [status, code, message] = repoScopeRequiredError();
+      return sendError(res, status, code, message);
+    }
+
+    const response = await fetch("https://api.github.com/user/repos", {
+      method: "POST",
+      headers: githubHeaders(accessToken, {
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({
+        name,
+        description,
+        private: req.body?.private === true,
+        auto_init: true,
+      }),
+    });
+
+    const data = await readGithubResponse(response);
+
+    if (!response.ok) {
+      const [status, code, message] = githubError(response, data);
+      const isDuplicate =
+        response.status === 422 && /already exists/i.test(data?.message || "");
+      return sendError(
+        res,
+        status,
+        isDuplicate ? "REPOSITORY_EXISTS" : code,
+        isDuplicate
+          ? "A repository with that name already exists on your account."
+          : message
+      );
     }
 
     return res.status(201).json({
       success: true,
       repository: {
-        id: githubData.id,
-        name: githubData.name,
-        full_name:
-          githubData.full_name,
-        private:
-          githubData.private,
-        default_branch:
-          githubData.default_branch,
-        html_url:
-          githubData.html_url,
-        description:
-          githubData.description || "",
+        id: data.id,
+        name: data.name,
+        full_name: data.full_name,
+        private: data.private,
+        default_branch: data.default_branch,
+        html_url: data.html_url,
+        description: data.description || "",
       },
     });
   } catch (error) {
-    console.error(
-      "Create repository error:",
-      error
+    console.error("GitHub repository creation failed", error?.message);
+    return sendError(
+      res,
+      500,
+      "CREATE_REPOSITORY_FAILED",
+      "Unable to create repository."
     );
-
-    return res.status(500).json({
-      success: false,
-      error:
-        error?.message ||
-        "Unable to create repository.",
-    });
   }
 }

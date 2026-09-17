@@ -1,453 +1,458 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
+import {
+  buildGitHubExportFiles,
+  readApiResponse,
+} from "../lib/githubExport";
 import "./GitHubConnect.css";
 
-function GitHubConnect() {
-  const [loading, setLoading] = useState(false);
-  const [connected, setConnected] = useState(false);
+function GitHubConnect({ projectName, htmlCode, cssCode, jsCode }) {
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [connection, setConnection] = useState(null);
   const [repositories, setRepositories] = useState([]);
-  const [reposLoading, setReposLoading] = useState(false);
-  const [error, setError] = useState("");
-
+  const [selectedRepository, setSelectedRepository] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [branch, setBranch] = useState("");
+  const [error, setError] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("github_error") || "";
+  });
+  const [success, setSuccess] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("github_connected") === "1"
+      ? "GitHub connected with repository access."
+      : "";
+  });
   const [repoName, setRepoName] = useState("");
   const [repoDescription, setRepoDescription] = useState("");
   const [repoPrivate, setRepoPrivate] = useState(false);
-  const [creatingRepo, setCreatingRepo] = useState(false);
+  const [commitMessage, setCommitMessage] = useState(
+    "Export website from AI Website Builder"
+  );
+  const [repositoryUrl, setRepositoryUrl] = useState("");
+  const requestIdRef = useRef(0);
 
-  async function getAccessToken() {
-    const { data, error } = await supabase.auth.getSession();
-
-    if (error) {
-      throw error;
+  const getToken = useCallback(async () => {
+    const { data, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !data.session?.access_token) {
+      throw new Error("Please log in first.");
     }
+    return data.session.access_token;
+  }, []);
 
-    return data?.session?.access_token || null;
-  }
-
-  async function loadRepositories() {
-    setReposLoading(true);
-    setError("");
-
-    try {
-      const token = await getAccessToken();
-
-      if (!token) {
-        throw new Error("Please log in first.");
-      }
-
-      const response = await fetch("/api/github/repos", {
-        method: "GET",
+  const request = useCallback(
+    async (path, options = {}) => {
+      const accessToken = await getToken();
+      const response = await fetch(path, {
+        ...options,
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${accessToken}`,
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+          ...options.headers,
         },
       });
 
-      const data = await response.json();
+      const data = await readApiResponse(response);
 
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Unable to load repositories."
+      if (!response.ok || data.success === false) {
+        const err = new Error(
+          data.error || `GitHub request failed (${response.status}).`
         );
+        err.code = data.code;
+        throw err;
       }
 
-      setRepositories(data.repositories || []);
-    } catch (error) {
-      console.error("GitHub repositories error:", error);
+      return data;
+    },
+    [getToken]
+  );
 
-      setError(
-        error?.message || "Unable to load repositories."
-      );
-    } finally {
-      setReposLoading(false);
-    }
-  }
+  const loadRepositories = useCallback(async () => {
+    const data = await request("/api/github/repos");
+    setRepositories(data.repositories || []);
+  }, [request]);
 
-  async function loadStatus() {
+  const loadStatus = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    setLoading(true);
+
     try {
-      const token = await getAccessToken();
+      const data = await request("/api/github/status");
+      if (requestId !== requestIdRef.current) return;
 
-      if (!token) {
+      if (!data.connected || !data.connection) {
+        setConnection(null);
+        setRepositories([]);
+        setSelectedRepository(null);
+        setBranches([]);
+        setBranch("");
         return;
       }
 
-      const response = await fetch("/api/github/status", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      setConnection(data.connection);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Unable to check GitHub."
+      if (data.connection.hasRepoScope === false) {
+        setError(
+          "GitHub is connected but repository access was not granted. Disconnect, revoke the app in GitHub Settings → Applications → Authorized OAuth Apps, then reconnect and approve repository access."
         );
       }
 
-      const isConnected = Boolean(data.connected);
-
-      setConnected(isConnected);
-      setConnection(data.connection || null);
-
-      if (isConnected) {
-        await loadRepositories();
+      await loadRepositories();
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      setError(err.message);
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("GitHub status error:", error);
     }
-  }
+  }, [loadRepositories, request]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-
-    const githubConnected = params.get("github_connected");
-    const githubError = params.get("github_error");
-
-    if (githubError) {
-      setError(githubError);
+    if (params.get("github_error") || params.get("github_connected")) {
+      window.history.replaceState({}, "", window.location.pathname);
     }
-
-    if (githubConnected === "1") {
-      window.history.replaceState(
-        {},
-        "",
-        window.location.pathname
-      );
-    }
-
     loadStatus();
-  }, []);
+  }, [loadStatus]);
 
-  async function handleConnect() {
-    setLoading(true);
+  async function connect() {
+    setBusy(true);
     setError("");
+    setSuccess("");
 
     try {
-      const token = await getAccessToken();
+      const data = await request("/api/github/connect", {
+        method: "POST",
+        body: JSON.stringify({ returnTo: window.location.pathname }),
+      });
 
-      if (!token) {
-        throw new Error("Please log in first.");
+      if (!data.authorizationUrl) {
+        throw new Error("GitHub authorization URL is missing.");
       }
 
-      const response = await fetch("/api/github/connect", {
+      window.location.assign(data.authorizationUrl);
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    setBusy(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      await request("/api/github/disconnect", { method: "POST" });
+      setConnection(null);
+      setRepositories([]);
+      setSelectedRepository(null);
+      setBranches([]);
+      setBranch("");
+      setRepositoryUrl("");
+      setSuccess(
+        "GitHub disconnected. You can reconnect to grant repository access again."
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function selectRepository(repo) {
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    setRepositoryUrl("");
+
+    try {
+      const data = await request(
+        `/api/github/branches?repository=${encodeURIComponent(repo.full_name)}`
+      );
+      setSelectedRepository(repo);
+      setBranches(data.branches || []);
+      setBranch(data.defaultBranch || data.branches?.[0]?.name || "");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createRepository(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const data = await request("/api/github/create-repo", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
-          returnTo: window.location.pathname,
+          name: repoName.trim(),
+          description: repoDescription.trim(),
+          private: repoPrivate,
         }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Unable to connect GitHub."
-        );
-      }
-
-      if (!data.authorizationUrl) {
-        throw new Error(
-          "GitHub authorization URL is missing."
-        );
-      }
-
-      window.location.href = data.authorizationUrl;
-    } catch (error) {
-      console.error("GitHub connect error:", error);
-
-      setError(
-        error?.message || "GitHub connection failed."
-      );
-
-      setLoading(false);
-    }
-  }
-
-  async function handleCreateRepository(event) {
-    event.preventDefault();
-
-    const name = repoName.trim();
-
-    if (!name) {
-      setError("Repository name is required.");
-      return;
-    }
-
-    setCreatingRepo(true);
-    setError("");
-
-    try {
-      const token = await getAccessToken();
-
-      if (!token) {
-        throw new Error("Please log in first.");
-      }
-
-      const response = await fetch(
-        "/api/github/create-repo",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name,
-            description: repoDescription.trim(),
-            private: repoPrivate,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Unable to create repository."
-        );
-      }
-
+      setRepositories((items) => [data.repository, ...items]);
       setRepoName("");
       setRepoDescription("");
       setRepoPrivate(false);
-
-      await loadRepositories();
-    } catch (error) {
-      console.error("Create repository error:", error);
-
-      setError(
-        error?.message ||
-          "Unable to create repository."
-      );
-    } finally {
-      setCreatingRepo(false);
+      setSuccess("Repository created. Select a branch and push your website.");
+      await selectRepository(data.repository);
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
     }
   }
 
-  async function handleDisconnect() {
-    setLoading(true);
+  async function push() {
+    if (!selectedRepository || !branch) return;
+
+    setBusy(true);
     setError("");
+    setSuccess("");
 
     try {
-      const token = await getAccessToken();
-
-      if (!token) {
-        throw new Error("Please log in first.");
-      }
-
-      const response = await fetch(
-        "/api/github/disconnect",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const files = buildGitHubExportFiles(
+        projectName,
+        htmlCode,
+        cssCode,
+        jsCode
       );
 
-      const data = await response.json();
+      const data = await request("/api/github/push", {
+        method: "POST",
+        body: JSON.stringify({
+          repository: selectedRepository.full_name,
+          branch,
+          message: commitMessage.trim(),
+          files,
+        }),
+      });
 
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Disconnect failed."
-        );
+      setRepositoryUrl(data.repositoryUrl || "");
+      setSuccess("Website files were committed to GitHub.");
+
+      if (data.repositoryUrl) {
+        window.open(data.repositoryUrl, "_blank", "noopener,noreferrer");
       }
-
-      setConnected(false);
-      setConnection(null);
-      setRepositories([]);
-      setError("");
-    } catch (error) {
-      console.error("GitHub disconnect error:", error);
-
-      setError(
-        error?.message || "Disconnect failed."
-      );
+    } catch (err) {
+      setError(err.message);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
-  if (connected) {
+  if (loading) {
     return (
       <div className="github-connect">
+        <p className="github-muted">Checking GitHub connection…</p>
+      </div>
+    );
+  }
+
+  if (!connection) {
+    return (
+      <div className="github-connect github-connect-only">
         <button
           type="button"
-          className="github-connected"
-          onClick={handleDisconnect}
-          disabled={loading}
+          className="github-connect-button"
+          onClick={connect}
+          disabled={busy}
         >
-          <span>✓ GitHub Connected</span>
-
-          {connection?.login && (
-            <span className="github-login">
-              — {connection.login}
-            </span>
-          )}
+          <span className="github-symbol">⌥</span>
+          <span>{busy ? "Connecting…" : "Connect GitHub"}</span>
         </button>
-
-        <form
-          onSubmit={handleCreateRepository}
-          className="github-card"
-        >
-          <div className="github-card-title">
-            Create New Repository
-          </div>
-
-          <input
-            type="text"
-            className="github-input"
-            placeholder="Repository name"
-            value={repoName}
-            onChange={(event) =>
-              setRepoName(event.target.value)
-            }
-            disabled={creatingRepo}
-          />
-
-          <textarea
-            className="github-textarea"
-            placeholder="Description (optional)"
-            value={repoDescription}
-            onChange={(event) =>
-              setRepoDescription(event.target.value)
-            }
-            disabled={creatingRepo}
-            rows={3}
-          />
-
-          <label className="github-checkbox">
-            <input
-              type="checkbox"
-              checked={repoPrivate}
-              onChange={(event) =>
-                setRepoPrivate(event.target.checked)
-              }
-              disabled={creatingRepo}
-            />
-
-            <span>Private repository</span>
-          </label>
-
-          <button
-            type="submit"
-            className="github-create-button"
-            disabled={
-              creatingRepo || !repoName.trim()
-            }
-          >
-            {creatingRepo
-              ? "Creating..."
-              : "Create Repository"}
-          </button>
-        </form>
-
-        <div className="github-card">
-          <div className="github-repo-header">
-            <div className="github-card-title">
-              GitHub Repositories
-            </div>
-
-            <button
-              type="button"
-              className="github-refresh-button"
-              onClick={loadRepositories}
-              disabled={reposLoading}
-            >
-              {reposLoading ? "Loading..." : "Refresh"}
-            </button>
-          </div>
-
-          {reposLoading &&
-            repositories.length === 0 && (
-              <p className="github-muted">
-                Loading repositories...
-              </p>
-            )}
-
-          {!reposLoading &&
-            repositories.length === 0 &&
-            !error && (
-              <p className="github-muted">
-                No repositories found.
-              </p>
-            )}
-
-          {repositories.length > 0 && (
-            <div className="github-repo-list">
-              {repositories.map((repo) => (
-                <div
-                  key={repo.id}
-                  className="github-repo"
-                >
-                  <div className="github-repo-info">
-                    <strong>{repo.name}</strong>
-
-                    <div className="github-repo-meta">
-                      {repo.private
-                        ? "Private"
-                        : "Public"}
-
-                      {" · "}
-
-                      {repo.default_branch || "main"}
-                    </div>
-
-                    {repo.description && (
-                      <div className="github-repo-description">
-                        {repo.description}
-                      </div>
-                    )}
-                  </div>
-
-                  <a
-                    href={repo.html_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="github-view-link"
-                  >
-                    View
-                  </a>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <div className="github-error">
-            {error}
-          </div>
-        )}
+        {success && <div className="github-success">{success}</div>}
+        {error && <div className="github-error">{error}</div>}
       </div>
     );
   }
 
   return (
-    <div className="github-connect github-connect-only">
-      <button
-        type="button"
-        className="github-connect-button"
-        onClick={handleConnect}
-        disabled={loading}
-      >
-        <span className="github-symbol">◇</span>
+    <div className="github-connect">
+      <div className="github-connected" role="status">
+        <span className="github-connected-label">
+          {connection.avatar ? (
+            <img
+              className="github-avatar"
+              src={connection.avatar}
+              alt=""
+              width="22"
+              height="22"
+            />
+          ) : null}
+          <span>
+            ✓ GitHub Connected
+            {connection.login ? ` — ${connection.login}` : ""}
+          </span>
+        </span>
+        <button
+          type="button"
+          className="github-disconnect-button"
+          onClick={disconnect}
+          disabled={busy}
+        >
+          Disconnect
+        </button>
+      </div>
 
-        {loading
-          ? "Connecting..."
-          : "Connect GitHub"}
-      </button>
+      <form onSubmit={createRepository} className="github-card">
+        <div className="github-card-title">Create New Repository</div>
+        <input
+          className="github-input"
+          placeholder="Repository name"
+          value={repoName}
+          onChange={(e) => setRepoName(e.target.value)}
+          disabled={busy}
+          maxLength={100}
+          required
+        />
+        <textarea
+          className="github-textarea"
+          placeholder="Description (optional)"
+          value={repoDescription}
+          onChange={(e) => setRepoDescription(e.target.value)}
+          disabled={busy}
+          rows={2}
+          maxLength={350}
+        />
+        <label className="github-checkbox">
+          <input
+            type="checkbox"
+            checked={repoPrivate}
+            onChange={(e) => setRepoPrivate(e.target.checked)}
+            disabled={busy}
+          />
+          Private repository
+        </label>
+        <button
+          className="github-create-button"
+          disabled={busy || !repoName.trim()}
+        >
+          {busy ? "Working…" : "Create Repository"}
+        </button>
+      </form>
 
-      {error && (
-        <div className="github-error">
-          {error}
+      <div className="github-card">
+        <div className="github-repo-header">
+          <div className="github-card-title">Select Existing Repository</div>
+          <button
+            type="button"
+            className="github-refresh-button"
+            onClick={() =>
+              loadRepositories().catch((err) => setError(err.message))
+            }
+            disabled={busy}
+          >
+            Refresh
+          </button>
+        </div>
+
+        {repositories.length ? (
+          <div className="github-repo-list">
+            {repositories.map((repo) => (
+              <button
+                type="button"
+                key={repo.id}
+                className={`github-repo ${
+                  selectedRepository?.id === repo.id
+                    ? "github-repo-selected"
+                    : ""
+                }`}
+                onClick={() => selectRepository(repo)}
+                disabled={busy}
+              >
+                <span className="github-repo-info">
+                  <strong>{repo.full_name}</strong>
+                  <span className="github-repo-meta">
+                    {repo.private ? "Private" : "Public"} ·{" "}
+                    {repo.default_branch || "main"}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="github-muted">No repositories found.</p>
+        )}
+      </div>
+
+      {selectedRepository && (
+        <div className="github-card">
+          <div className="github-card-title">Push Builder Files</div>
+          <p className="github-muted">
+            Exports <code>index.html</code>, <code>style.css</code>, and{" "}
+            <code>script.js</code> to{" "}
+            <strong>{selectedRepository.full_name}</strong>.
+          </p>
+          <label className="github-field-label" htmlFor="github-branch">
+            Branch
+          </label>
+          <select
+            id="github-branch"
+            className="github-input"
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+            disabled={busy || !branches.length}
+          >
+            {branches.length === 0 ? (
+              <option value="">No branches available</option>
+            ) : (
+              branches.map((item) => (
+                <option key={item.name} value={item.name}>
+                  {item.name}
+                  {item.default ? " (default)" : ""}
+                </option>
+              ))
+            )}
+          </select>
+          <label className="github-field-label" htmlFor="github-commit">
+            Commit message
+          </label>
+          <input
+            id="github-commit"
+            className="github-input"
+            value={commitMessage}
+            onChange={(e) => setCommitMessage(e.target.value)}
+            disabled={busy}
+            maxLength={250}
+          />
+          <button
+            type="button"
+            className="github-create-button"
+            onClick={push}
+            disabled={busy || !branch || !commitMessage.trim()}
+          >
+            {busy ? "Pushing…" : "Push to GitHub"}
+          </button>
         </div>
       )}
+
+      {success && (
+        <div className="github-success">
+          {success}
+          {repositoryUrl ? (
+            <>
+              {" "}
+              <a
+                href={repositoryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="github-view-link"
+              >
+                Open repository
+              </a>
+            </>
+          ) : null}
+        </div>
+      )}
+      {error && <div className="github-error">{error}</div>}
     </div>
   );
 }
