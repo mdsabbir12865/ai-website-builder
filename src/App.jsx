@@ -7,6 +7,7 @@ import Builder from "./pages/Builder";
 import Templates from "./pages/Templates";
 import Eula from "./pages/Eula";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import Docs from "./pages/Docs";
 
 function LandingPage() {
   return (
@@ -437,6 +438,7 @@ function App() {
       <Route path="/builder/:projectId" element={<Builder />} />
       <Route path="/eula" element={<Eula />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      <Route path="/docs" element={<Docs />} />
 
     </Routes>
   );
