@@ -5,6 +5,8 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Builder from "./pages/Builder";
 import Templates from "./pages/Templates";
+import Eula from "./pages/Eula";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 function LandingPage() {
   return (
@@ -396,6 +398,14 @@ function LandingPage() {
             Pricing
           </a>
 
+          <Link to="/eula">
+            EULA
+          </Link>
+
+          <Link to="/privacy-policy">
+            Privacy Policy
+          </Link>
+
         </div>
 
         <div className="socials">
@@ -420,17 +430,15 @@ function App() {
     <Routes>
 
       <Route path="/" element={<LandingPage />} />
-<Route
-  path="/templates"
-  element={<Templates />}
-/>
+      <Route path="/templates" element={<Templates />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/dashboard" element={<Dashboard />} />
-<Route path="/builder/:projectId" element={<Builder />} />
+      <Route path="/builder/:projectId" element={<Builder />} />
+      <Route path="/eula" element={<Eula />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
- </Routes>
-
+    </Routes>
   );
 }
 

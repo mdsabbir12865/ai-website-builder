@@ -14,6 +14,7 @@ import { supabase } from "../lib/supabase";
 import JSZip from "jszip";
 import FileUpload from "../components/FileUpload";
 import GitHubConnect from "../components/GitHubConnect";
+import VercelDeploy from "../components/VercelDeploy";
 
 function Builder() {
   const { projectId } = useParams();
@@ -127,7 +128,10 @@ function Builder() {
       return (
         params.get("github_connected") === "1" ||
         Boolean(params.get("github_error")) ||
-        sessionStorage.getItem("github_export_open") === "1"
+        sessionStorage.getItem("github_export_open") === "1" ||
+        params.get("vercel_connected") === "1" ||
+        Boolean(params.get("vercel_error")) ||
+        sessionStorage.getItem("vercel_export_open") === "1"
       );
     });
 
@@ -138,7 +142,9 @@ function Builder() {
 
     if (
       params.get("github_connected") === "1" ||
-      params.get("github_error")
+      params.get("github_error") ||
+      params.get("vercel_connected") === "1" ||
+      params.get("vercel_error")
     ) {
       setShowExport(true);
     }
@@ -148,6 +154,13 @@ function Builder() {
     ) {
       setShowExport(true);
       sessionStorage.removeItem("github_export_open");
+    }
+
+    if (
+      sessionStorage.getItem("vercel_export_open") === "1"
+    ) {
+      setShowExport(true);
+      sessionStorage.removeItem("vercel_export_open");
     }
   }, []);
 
@@ -2143,13 +2156,14 @@ ${jsCode}
       ================================================== */}
 
       {showExport && (
-        <div className="export-menu">
+        <div className="export-menu export-menu-expanded">
 
           <div className="export-title">
             Export Project
           </div>
 
           <button
+            type="button"
             onClick={
               handleDownloadZip
             }
@@ -2158,6 +2172,7 @@ ${jsCode}
           </button>
 
           <button
+            type="button"
             onClick={
               handleExportCode
             }
@@ -2165,19 +2180,105 @@ ${jsCode}
             &lt;/&gt; Export Code
           </button>
 
-          <GitHubConnect
-            projectName={project?.name}
-            htmlCode={htmlCode}
-            cssCode={cssCode}
-            jsCode={jsCode}
-          />
-          <button>
-            ▲ Vercel
+          <div className="export-section">
+            <div className="export-section-title">
+              GitHub
+            </div>
+            <GitHubConnect
+              projectName={project?.name}
+              htmlCode={htmlCode}
+              cssCode={cssCode}
+              jsCode={jsCode}
+            />
+          </div>
 
-            <small>
-              Coming soon
-            </small>
-          </button>
+          <div className="export-section">
+            <div className="export-section-title">
+              Vercel
+            </div>
+            <VercelDeploy
+              projectId={projectId}
+              projectName={project?.name}
+              linkedVercelProjectId={
+                project?.vercel_project_id || ""
+              }
+              linkedVercelProjectName={
+                project?.vercel_project_name || ""
+              }
+              lastDeploymentUrl={
+                project?.last_deployment_url || ""
+              }
+              githubRepository={
+                project?.github_repo_full_name || ""
+              }
+              githubBranch={
+                project?.github_branch || ""
+              }
+              onProjectMetaChange={(meta) => {
+                setProject((current) =>
+                  current
+                    ? { ...current, ...meta }
+                    : current
+                );
+
+                const persistable = {};
+                if (
+                  Object.prototype.hasOwnProperty.call(
+                    meta,
+                    "vercel_project_id"
+                  )
+                ) {
+                  persistable.vercel_project_id =
+                    meta.vercel_project_id;
+                }
+                if (
+                  Object.prototype.hasOwnProperty.call(
+                    meta,
+                    "vercel_project_name"
+                  )
+                ) {
+                  persistable.vercel_project_name =
+                    meta.vercel_project_name;
+                }
+                if (
+                  Object.prototype.hasOwnProperty.call(
+                    meta,
+                    "last_deployment_id"
+                  )
+                ) {
+                  persistable.last_deployment_id =
+                    meta.last_deployment_id;
+                }
+                if (
+                  Object.prototype.hasOwnProperty.call(
+                    meta,
+                    "last_deployment_url"
+                  )
+                ) {
+                  persistable.last_deployment_url =
+                    meta.last_deployment_url;
+                }
+
+                if (
+                  projectId &&
+                  Object.keys(persistable).length
+                ) {
+                  void supabase
+                    .from("projects")
+                    .update(persistable)
+                    .eq("id", projectId)
+                    .then(({ error: persistError }) => {
+                      if (persistError) {
+                        console.error(
+                          "Vercel project link save failed:",
+                          persistError.message
+                        );
+                      }
+                    });
+                }
+              }}
+            />
+          </div>
 
         </div>
       )}

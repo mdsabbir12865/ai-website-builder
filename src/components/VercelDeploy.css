@@ -1,0 +1,485 @@
+.vercel-deploy {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: #111827;
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  box-sizing: border-box;
+}
+
+.vercel-deploy *,
+.vercel-deploy *::before,
+.vercel-deploy *::after {
+  box-sizing: border-box;
+}
+
+.vercel-connect-button,
+.vercel-primary-button,
+.vercel-secondary-button,
+.vercel-ghost-button,
+.vercel-disconnect-button,
+.vercel-project {
+  font: inherit;
+}
+
+.vercel-connect-button {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #000000;
+  color: #ffffff;
+  border: 1px solid #000000;
+  border-radius: 10px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.vercel-connect-button:hover:not(:disabled) {
+  background: #111111;
+  border-color: #111111;
+}
+
+.vercel-connect-button:focus-visible,
+.vercel-primary-button:focus-visible,
+.vercel-secondary-button:focus-visible,
+.vercel-ghost-button:focus-visible,
+.vercel-project:focus-visible,
+.vercel-disconnect-button:focus-visible,
+.vercel-input:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.vercel-connect-button:disabled,
+.vercel-primary-button:disabled,
+.vercel-secondary-button:disabled,
+.vercel-ghost-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vercel-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.vercel-connected {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.vercel-connected-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vercel-connected-label > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vercel-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #e5e7eb;
+}
+
+.vercel-disconnect-button {
+  border: 0;
+  background: transparent;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 4px 2px;
+  min-height: 32px;
+}
+
+.vercel-disconnect-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vercel-card {
+  width: 100%;
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vercel-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vercel-card-title {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.vercel-linked {
+  margin: 0;
+  font-size: 13px;
+  color: #374151;
+  word-break: break-word;
+}
+
+.vercel-linked strong {
+  color: #111827;
+}
+
+.vercel-muted {
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  word-break: break-word;
+}
+
+.vercel-muted code {
+  font-size: 12px;
+  background: #f3f4f6;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.vercel-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.45;
+}
+
+.vercel-project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vercel-project {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  padding: 12px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  min-height: 44px;
+}
+
+.vercel-project:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.vercel-project-selected {
+  border-color: #111827;
+  background: #f9fafb;
+}
+
+.vercel-project:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vercel-project-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.vercel-project strong {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.vercel-project-meta {
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vercel-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 5px;
+  color: #111827;
+}
+
+.vercel-input {
+  width: 100%;
+  color: #111827;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 11px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.vercel-input:disabled {
+  background: #f9fafb;
+  cursor: not-allowed;
+}
+
+.vercel-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.vercel-primary-button {
+  width: 100%;
+  min-height: 42px;
+  background: #000000;
+  color: #ffffff;
+  border: 1px solid #000000;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+  text-align: center;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vercel-primary-button:hover:not(:disabled) {
+  background: #111111;
+}
+
+.vercel-secondary-button {
+  width: 100%;
+  min-height: 40px;
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.vercel-secondary-button:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.vercel-ghost-button {
+  flex-shrink: 0;
+  background: #ffffff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.vercel-ghost-button:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.vercel-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vercel-progress-bar {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.vercel-progress-pulse {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #111827, #4b5563, #111827);
+  background-size: 200% 100%;
+  animation: vercel-progress-move 1.2s ease-in-out infinite;
+}
+
+@keyframes vercel-progress-move {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+.vercel-progress-label {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.vercel-success {
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.vercel-live {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vercel-live-title {
+  font-weight: 700;
+}
+
+.vercel-live-link {
+  color: #166534;
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-all;
+  text-decoration: underline;
+}
+
+.vercel-live-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.vercel-open-link {
+  text-decoration: none;
+}
+
+.vercel-error {
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.vercel-error p {
+  margin: 0 0 8px;
+}
+
+.vercel-error-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.vercel-error-actions .vercel-secondary-button {
+  width: auto;
+  min-width: 120px;
+}
+
+.vercel-meta {
+  margin: 0;
+  font-size: 11px;
+  color: #9ca3af;
+  word-break: break-all;
+}
+
+.vercel-reconnect-card {
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .vercel-deploy {
+    max-width: 100%;
+  }
+
+  .vercel-card {
+    padding: 14px;
+  }
+
+  .vercel-card-header {
+    align-items: flex-start;
+  }
+
+  .vercel-live-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .vercel-connected {
+    flex-wrap: wrap;
+  }
+
+  .vercel-project-meta {
+    white-space: normal;
+  }
+}
