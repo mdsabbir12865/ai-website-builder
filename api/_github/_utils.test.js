@@ -41,7 +41,10 @@ test("OAuth state round-trips and rejects tampering", () => {
   const payload = verifyOAuthState(state);
   assert.equal(payload.userId, "user-123");
   assert.equal(payload.returnTo, "/builder/abc");
-  assert.equal(verifyOAuthState(state.slice(0, -1) + "0"), null);
+  const lastDot = state.lastIndexOf(".");
+  const signature = state.slice(lastDot + 1);
+  const flipped = `${signature[0] === "a" ? "b" : "a"}${signature.slice(1)}`;
+  assert.equal(verifyOAuthState(`${state.slice(0, lastDot + 1)}${flipped}`), null);
   assert.equal(verifyOAuthState("not-valid"), null);
 });
 

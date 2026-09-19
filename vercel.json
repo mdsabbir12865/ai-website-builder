@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/github/:action",
+      "destination": "/api/github?action=:action"
+    },
+    {
+      "source": "/api/vercel/:action",
+      "destination": "/api/vercel?action=:action"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
